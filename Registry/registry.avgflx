@@ -1,3 +1,4 @@
+state    real  passec           -      dyn_em       -         -     r         "passec"           "TEMPO PASSATO"                                    ""
 state    real   avgflx_rum     ikj     dyn_em      1         X      rh      "avgflx_rum"        "hist-time-averaged mu-coupled u"   "Pa m s-1"
 state    real   avgflx_rvm     ikj     dyn_em      1         Y      rh       "avgflx_rvm"        "hist-time-averaged mu-coupled v"   "Pa m s-1"
 state    real   avgflx_wwm     ikj     dyn_em      1         Z      rh        "avgflx_wwm"   "hist-time-averaged mu-coupled eta-dot"          "Pa s-1"

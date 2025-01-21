@@ -309,7 +309,7 @@ state    real   ht_coarse       ij     misc        1   -     r                - 
 
 
 # TKE
-state    real   tke            ikj     dyn_em      2         -       r        "tke"          "TURBULENCE KINETIC ENERGY"     "m2 s-2"
+state    real   tke            ikj     dyn_em      2         -       rh        "tke"          "TURBULENCE KINETIC ENERGY"     "m2 s-2"
 i1       real   tke_tend       ikj     dyn_em      1         -      
 
 # variables in 3DTKE scheme (km_opt=5)
@@ -821,10 +821,10 @@ state    real   DZR             l        em      -         Z     r        "DZR" 
 state    real   DZB             l        em      -         Z     r        "DZB"            "THICKNESSES OF WALL LAYERS"                      "m"
 state    real   DZG             l        em      -         Z     r        "DZG"            "THICKNESSES OF ROAD LAYERS"                      "m"
 state    real   URB_PARAM      i{urb}j  misc      1        -     i1       "URB_PARAM" "NUDAPT_NBSD Urban Parameters" "parameter"
-state    real   LP_URB2D       ij       misc      1        -     i01r     "BUILD_AREA_FRACTION" "BUILDING PLAN AREA DENSITY"   "dimensionless"
-state    real   HI_URB2D       i{uhi}j  misc      1        Z     ir       "HEIGHT_HISTOGRAMS" "DISTRIBUTION OF BUILDING HEIGHTS" "dimensionless"
-state    real   LB_URB2D       ij       misc      1        -     ir       "BUILD_SURF_RATIO" "BUILDING SURFACE AREA TO PLAN AREA RATIO" "dimensionless"
-state    real   HGT_URB2D      ij       misc      1        -     ir       "BUILD_HEIGHT" "AVERAGE BUILDING HEIGHT WEIGHTED BY BUILDING PLAN AREA" "m"
+state    real   LP_URB2D       ij       misc      1        -     i01rh     "BUILD_AREA_FRACTION" "BUILDING PLAN AREA DENSITY"   "dimensionless"
+state    real   HI_URB2D       i{uhi}j  misc      1        Z     irh       "HEIGHT_HISTOGRAMS" "DISTRIBUTION OF BUILDING HEIGHTS" "dimensionless"
+state    real   LB_URB2D       ij       misc      1        -     irh       "BUILD_SURF_RATIO" "BUILDING SURFACE AREA TO PLAN AREA RATIO" "dimensionless"
+state    real   HGT_URB2D      ij       misc      1        -     irh       "BUILD_HEIGHT" "AVERAGE BUILDING HEIGHT WEIGHTED BY BUILDING PLAN AREA" "m"
 state    real   MH_URB2D       ij       misc      1        -     i01r     "MH_URB2D"  "Mean Building Height" "m"
 state    real   STDH_URB2D     ij       misc      1        -     ir       "STDH_URB2D" "Standard Deviation of Building Height" "m2"
 state    real   LF_URB2D       i{udr}j  misc      1        Z     ir       "LF_URB2D"   "Frontal Area Index" "dimensionless"
@@ -855,6 +855,7 @@ state    real   ZWATBLE2D        ij     misc        1         -      r          
 state    real   SFCRUNOFF        ij     misc        1         -      rhd=(interp_mask_field:lu_index,iswater)      "SFROFF"           "SURFACE RUNOFF"     "mm"
 state    real   UDRUNOFF         ij     misc        1         -      rhd=(interp_mask_field:lu_index,iswater)      "UDROFF"           "UNDERGROUND RUNOFF" "mm"
 state  integer  IVGTYP           ij     misc        1         -     i02rhd=(interp_fcni)u=(copy_fcni)           "IVGTYP"           "DOMINANT VEGETATION CATEGORY" ""
+state  integer  URBAN_VEGETATION  ij     misc        1         -     i02rhd=(interp_fcni)u=(copy_fcni)           "URBAN_VEGETATION"           "URBAN VEGETATION CATEGORY" ""
 state  integer  ISLTYP           ij     misc        1         -     i02rhd=(interp_mask_soil:lu_index)u=(copy_fcni)           "ISLTYP"           "DOMINANT SOIL CATEGORY"       ""
 state    real   VEGFRA           ij     misc        1         -     i024rhd=(interp_mask_field:lu_index,iswater)u=(copy_fcnm)   "VEGFRA"           "VEGETATION FRACTION" ""
 state    real   SFCEVP           ij     misc        1         -      r                                          "SFCEVP"           "ACCUMULATED SURFACE EVAPORATION" "kg m-2"
@@ -943,12 +944,19 @@ state    real   LH_URB2D        ij    misc        1         -       rd=(interp_f
 state    real   G_URB2D         ij    misc        1         -       rd=(interp_fcnm)u=(copy_fcnm)        "G_URB"  "GROUND HEAT FLUX INTO URBAN"        "W m{-2}"
 state    real   RN_URB2D        ij    misc        1         -       rd=(interp_fcnm)u=(copy_fcnm)       "RN_URB"  "NET RADIATION ON URBAN SFC"         "W m{-2}"
 state    real   TS_URB2D        ij    misc        1         -       rd=(interp_fcnm)u=(copy_fcnm)       "TS_URB"  "SKIN TEMPERATURE"          "K"
-state    real   FRC_URB2D       ij    misc        1         -     i012rd=(interp_fcnm)u=(copy_fcnm)      "FRC_URB2D"  "URBAN FRACTION"         "dimensionless"
+state    real   FRC_URB2D       ij    misc        1         -     i012rdh=(interp_fcnm)u=(copy_fcnm)      "FRC_URB2D"  "URBAN FRACTION"         "dimensionless"
+state    real   FAD_URB3D       ikj    misc        1         -     i012rdh=(interp_fcnm)u=(copy_fcnm)      "FAD_URB3D"  "FRONTAL AREA DENSITY PER LEVEL"  "dimensionless"
+state    real   PV_FRC_URB2D       ij    misc        1         -     i012rd=(interp_fcnm)u=(copy_fcnm)      "PV_FRC_URB2D"  "PV FRACTION"         "dimensionless"
+state    real   GR_FRC_URB2D       ij    misc        1         -     i012rd=(interp_fcnm)u=(copy_fcnm)      "GR_FRC_URB2D"  "GR FRACTION"         "dimensionless"
+state    real   GARDEN_FRC_URB2D       ij    misc        1         -     i012rd=(interp_fcnm)u=(copy_fcnm)      "GARDEN_FRC_URB2D"  "GARDEN FRACTION"         "dimensionless"
+state    real   ALBR_URB2D       ij    misc        1         -     i012rd=(interp_fcnm)u=(copy_fcnm)      "ALBR_URB2D"  "ALBEDO ROOFS"         "dimensionless"
+state   real     BW_URB2D    ij          misc       1         -     rh      "BW_URB2D" "street width" "m"
+state   real     SW_URB2D    ij          misc       1         -     rh      "SW_URB2D" "building width" "m"
 state    integer   UTYPE_URB2D  ij    misc        1         -     rd=(interp_fcni)u=(copy_fcni)       "UTYPE_URB"  "URBAN TYPE"         "dimensionless"
 state    real   TRB_URB4D       i{umap1}j   misc       1         Z     r      "TRB_URB4D" "ROOF LAYER TEMPERATURE"          "K"
 state    real   TW1_URB4D       i{umap2}j   misc       1         Z     r      "TW1_URB4D" "WALL LAYER TEMPERATURE"          "K"
 state    real   TW2_URB4D       i{umap2}j   misc       1         Z     r      "TW2_URB4D" "WALL LAYER TEMPERATURE"          "K"
-state    real   TGB_URB4D       i{umap3}j   misc       1         Z     r      "TGB_URB4D" "ROAD LAYER TEMPERATURE"          "K"
+state    real   TGB_URB4D       i{umap3}j   misc       1         Z     rh      "TGB_URB4D" "ROAD LAYER TEMPERATURE"          "K"
 state    real   TLEV_URB3D      i{umap6}j   misc       1         Z     r      "TLEV_URB3D" "INDOOR TEMPERATURE"             "K"
 state    real   QLEV_URB3D      i{umap6}j   misc       1         Z     r      "QLEV_URB3D" "SPECIFIC HUMIDITY"              "dimensionless"
 state    real   TW1LEV_URB3D    i{umap7}j   misc       1         Z     r      "TW1LEV_URB3D" "WINDOW TEMPERATURE"           "K"
@@ -968,19 +976,34 @@ state    real   SFR_URB3D       i{umap5}j   misc       1         Z     r      "S
 state    real   SFG_URB3D       i{umap0}j   misc       1         Z     r      "SFG_URB3D"  "SENSIBLE HEAT FLUX FROM URBAN SFC"  "W m{-2}"
 state    real   EP_PV_URB3D     ij          misc       1         -     rh     "EP_PV_URB3D"  "ELEC. PRODUCTION OF ROOFTOP PV PANELS" "W m{-2}" !PVP
 state    real   T_PV_URB3D      i{umap5}j   misc       1         -     r      "T_PV_URB3D"  "PHOTOVOLTAIC PANELS TEMPERATURE " "K" !PVP
-state    real   TRV_URB4D       i{umap10}j  misc       1         Z     r      "TRV_URB4D" "GREEN ROOF LAYER TEMPERATURE"          "K"
-state    real   QR_URB4D        i{umap10}j  misc       1         Z     r      "QR_URB4D" "GREEN ROOF LAYER MOISTURE"          "dimensionless"
+state    real   TRV_URB4D       i{umap10}j  misc       1         Z     rh      "TRV_URB4D" "GREEN ROOF LAYER TEMPERATURE"          "K"
+state    real   QR_URB4D        i{umap10}j  misc       1         Z     rh      "QR_URB4D" "GREEN ROOF LAYER MOISTURE"          "dimensionless"
 state    real   QGR_URB3D       ij          misc       1         Z     rh     "QGR_URB4D" "GREEN ROOF LAYER MOISTURE OUTPUT"          "dimensionless"
 state    real   TGR_URB3D       ij          misc       1         Z     rh     "TGR_URB4D" "GREEN ROOF LAYER TEMPERATURE OUTPUT"          "dimensionless"
 state    real   DRAIN_URB4D     i{umap5}j   misc       1         Z     r      "DRAIN_URB4D" "GREEN ROOF DRAINAGE"          "mm"
-state    real   DRAINGR_URB3D   ij          misc       1         -     rh     "DRAINGR_URB3D"  "ACCUMULATED GREEN ROOF DRAINAGE" "mm"
+state    real   DRAINGR_URB3D   ij          misc       1         -     r     "DRAINGR_URB3D"  "ACCUMULATED GREEN ROOF DRAINAGE" "mm"
 state    real   SFRV_URB3D      i{umap5}j   misc       1         Z     r      "SFRV_URB3D"  "SENSIBLE HEAT FLUX FROM GREEN ROOF"  "W m{-2}"
 state    real   LFRV_URB3D      i{umap5}j   misc       1         Z     r      "LFRV_URB3D"  "LATENT HEAT FLUX FROM GREEN ROOF"  "W m{-2}"
 state    real   DGR_URB3D       i{umap5}j   misc       1         Z     r      "DGR_URB3D" "ROOF LAYER DEPTH WATER RETENTION"          "mm"
 state    real   DG_URB3D        i{umap0}j   misc       1         Z     r      "DG_URB4D" "ROOF LAYER DEPTH WATER RETENTION"          "mm"
 state    real   LFR_URB3D       i{umap5}j   misc       1         Z     r      "LFR_URB3D"  "LATENT HEAT FLUX FROM URBAN SFC"  "W m{-2}"
-state    real   LFG_URB3D       i{umap0}j   misc       1         Z     r      "LFG_URB3D"  "LATENT HEAT FLUX FROM URBAN SFC"  "W m{-2}"
-
+state    real   LFG_URB3D       i{umap0}j   misc       1         Z     rh      "LFG_URB3D"  "LATENT HEAT FLUX FROM URBAN SFC"  "W m{-2}"
+state    real   TGV_URB4D       i{umap3}j    misc       1         Z     rh      "TGV_URB4D" "VEGETATED GROUND LAYER TEMPERATURE"          "K"
+state    real   SFGV_URB3D      i{umap0}j    misc       1         Z     rh      "SFGV_URB3D"  "SENSIBLE HEAT FLUX FROM GREEN GROUND"  "W m{-2}"
+state    real   LFGV_URB3D      i{umap0}j    misc       1         Z     rh      "LFGV_URB3D"  "LATENT HEAT FLUX FROM GREEN GROUND"  "W m{-2}"
+state    real   QG_URB4D        i{umap3}j    misc       1         Z     rh      "QG_URB4D" "VEGETATED GROUND LAYER MOISTURE"          "dimensionless"
+# start WRF COMFORT
+ state   real     TMR_11         ij          misc       1         -     rh      "TMR_11" "MEAN RADIANT TEMPERATURE 11" "K"
+ state   real     TMR_12         ij          misc       1         -     rh      "TMR_12" "MEAN RADIANT TEMPERATURE 12" "K"
+ state   real     TMR_13         ij          misc       1         -     rh      "TMR_13" "MEAN RADIANT TEMPERATURE 13" "K"
+ state   real     TMR_21         ij          misc       1         -     rh      "TMR_21" "MEAN RADIANT TEMPERATURE 11" "K"
+ state   real     TMR_22         ij          misc       1         -     rh      "TMR_22" "MEAN RADIANT TEMPERATURE 12" "K"
+ state   real     TMR_23         ij          misc       1         -     rh      "TMR_23" "MEAN RADIANT TEMPERATURE 13" "K"
+ state   real     COMF_10        ij          misc       1         -     rh      "COMF_10" "10% of Comfort Index" "C"
+ state   real     COMF_50        ij          misc       1         -     rh      "COMF_50" "50% of Comfort Index" "C"
+ state   real     COMF_90        ij          misc       1         -     rh      "COMF_90" "90% of Comfort Index" "C"
+ state   real     HIST_COMF    i{ucomf}j          misc       1         -     rh      "HIST_COMF" "histograms for thermal comfort" "%"
+ # start WRF COMFORT
 state    real   CMR_SFCDIF      ij          misc       1         -     r      "CMR_SFCDIF" "" ""
 state    real   CHR_SFCDIF      ij          misc       1         -     r      "CHR_SFCDIF" "" ""
 state    real   CMC_SFCDIF      ij          misc       1         -     r      "CMC_SFCDIF" "" ""
@@ -1042,7 +1065,45 @@ state   real   WSPD           ij     misc        1         -     -         "WSPD
 i1      real   GZ1OZ0         ij     misc        1         -     -         "GZ1OZ0"              "LOG OF Z1 over Z0"                     ""
 state   real   BR             ij     misc        1         -     -         "BR"                  "Bulk Richardson"                       ""
 state   real   ZOL            ij     misc        1         -     -         "ZOL"                 "z/L"                                   ""
-
+ state    real   u_mean         ikj     misc        1         -      rh       "u_mean"               "U Mean"      "m s-1"
+ state    real   v_mean         ikj     misc        1         -      rh       "v_mean"               "V Mean"      "m s-1"
+ state    real   u_10_mean      ij      misc        1         -      rh       "u_10_mean"               "U 10 Mean"      "m s-1"
+ state    real   v_10_mean      ij      misc        1         -      rh       "v_10_mean"               "V 10 Mean"      "m s-1"
+ state    real   t_2_mean       ij      misc        1         -      rh       "t_2_mean"               "T2 Mean"      "m s-1"
+ state    real   wspv_mean      ikj     misc        1         -      rh       "wspv_mean"               "WSPV Mean"      "m s-1"
+ state    real   th_mean        ikj     misc        1         -      rh       "th_mean"              "TH Mean"     "K"
+ state    real   tt_mean        ikj     misc        1         -      rh       "tt_mean"              "TT Mean"     "K"
+ state    real   uu_mean        ikj     misc        1         -      rh       "uu_mean"               "UU Mean"      "m2 s-2"
+ state    real   vv_mean        ikj     misc        1         -      rh       "vv_mean"               "VV Mean"      "m2 s-2"
+ state    real   ww_mean        ikj     misc        1         -      rh       "ww_mean"               "WW Mean"      "m2 s-2"
+ state    real   uv_mean        ikj     misc        1         -      rh       "uv_mean"               "UV Mean"      "m2 s-2"
+ state    real   uw_mean        ikj     misc        1         -      rh       "uw_mean"               "UW Mean"      "m2 s-2"
+ state    real   vw_mean        ikj     misc        1         -      rh       "vw_mean"               "VW Mean"      "m2 s-2"
+ state    real   ut_mean        ikj     misc        1         -      rh       "ut_mean"               "UT Mean"      "K m s-1"
+ state    real   wt_mean        ikj     misc        1         -      rh       "wt_mean"               "WT Mean"      "K m s-1"
+ state    real   vt_mean        ikj     misc        1         -      rh       "vt_mean"               "VT Mean"      "K m s-1"
+ state    real   tke_mean       ikj     misc        1         -      rh       "tke_mean"              "TKE Mean"      "m-2 s-2"
+ state    real   tke_pbl_mean   ikj     misc        1         -      rh       "tke_pbl_mean"               "TKE PBL Mean"      "m-2 s-2"
+ state    real   diss_pbl_mean   ikj     misc       1         -      rh      "diss_pbl_mean"               "TKE PBL Mean"      "m-2 s-2"
+ state    real   tpe_pbl_mean   ikj     misc        1         -      rh      "tpe_pbl_mean"               "TPE PBL Mean"      "K2"
+ state    real   wt_tur_mean    ikj     misc        1         -      rh       "wt_tur_mean"               "WT Mean"      "m-2 s-2"
+ state    real   wu_tur_mean    ikj     misc        1         -      rh       "wu_tur_mean"               "WU PBL Mean"      "m-2 s-2"
+ state    real   wv_tur_mean    ikj     misc        1         -      rh      "wv_tur_mean"               "WV PBL Mean"      "m-2 s-2"
+ state    real   exch_m_mean    ikj     misc        1         -      rh       "exch_m_mean"               "EXCH_M Mean"      "m^2 s"
+ state    real   exch_h_mean    ikj     misc        1         -      rh       "exch_h_mean"               "EXCH_H Mean"      "m^2 s"
+ state   real    xkmv_mean            ikj      misc        1         -     rh         "xkmv_mean"                  "HORIZONTAL EDDY VISCOSITY"   "m2 s-1"
+ state   real    xkhv_mean            ikj      misc        1         -     rh         "xkhv_mean"                  "VERTICAL EDDY DIFFUSIVITY OF HEAT"
+ state   real    xkmh_mean            ikj      misc        1         -     rh         "xkmh_mean"                  "HORIZONTAL EDDY VISCOSITY"   "m2 s-1"
+ state   real    xkhh_mean            ikj      misc        1         -     rh         "xkhh_mean"                  "HORIZONTAL EDDY DIFFUSIVITY OF HEAT"
+ state   real    tr1_mean            ikj      misc        1         -     rh         "tr1_mean"                  "HORIZONTAL EDDY VISCOSITY"   "m2 s-1"
+ state   real    tr2_mean            ikj      misc        1         -     rh         "tr2_mean"                  "VERTICAL EDDY DIFFUSIVITY OF HEAT"
+ state   real    tr3_mean            ikj      misc        1         -     rh         "tr3_mean"                  "HORIZONTAL EDDY VISCOSITY"   "m2 s-1"
+ state   real    tr4_mean            ikj      misc        1         -     rh         "tr4_mean"                  "HORIZONTAL EDDY DIFFUSIVITY OF HEAT"
+ state   real    tr5_mean            ikj      misc        1         -     rh         "tr5_mean"                  "HORIZONTAL EDDY VISCOSITY"   "m2 s-1"
+ state   real    tr6_mean            ikj      misc        1         -     rh         "tr6_mean"                  "VERTICAL EDDY DIFFUSIVITY OF HEAT"
+ state   real    tr7_mean            ikj      misc        1         -     rh         "tr7_mean"                  "HORIZONTAL EDDY VISCOSITY"   "m2 s-1"
+ state   real    tr8_mean            ikj      misc        1         -     rh         "tr8_mean"                  "HORIZONTAL EDDY DIFFUSIVITY OF HEAT"
+ state    integer   mean_count    -      dyn_em      -         -       r     "mean_count"    "Counter for time-averaged variables"  ""
 # ysupbl variables for grims shallow convection
 state   real   WSTAR_YSU      ij     misc        1         -     -        "WSTAR_YSU"           "mixed-layer velocity scale from ysupbl" "m/s"
 state   real   DELTA_YSU      ij     misc        1         -     -        "DELTA_YSU"           "entrainment layer depth from ysupbl"    "m"
@@ -2527,6 +2588,7 @@ rconfig   integer urban_map_wd            derived         	1             1      
 rconfig   integer urban_map_gbd           derived         	1             1        rh    "urban_map_gbd"   "urban mapping 8: ind_gbd"      ""  
 rconfig   integer urban_map_fbd           derived         	1             1        rh    "urban_map_fbd"   "urban mapping 9: ind_fbd"      ""  
 rconfig   integer urban_map_zgrd          derived               1             1        rh    "urban_map_zgrd"  "urban mapping 10: ind_zgrd"      ""
+rconfig   integer num_urban_ncomf          derived               1             1        rh    "num_urban_ncomf"  "urban mapping comf"      ""
 rconfig   integer num_urban_hi            namelist,physics      1            15       irh    "num_urban_hi"             ""      ""
 rconfig   integer num_months              namelist,physics      1            12       irh    "num_months"               ""      ""
 rconfig   integer sf_surface_mosaic       namelist,physics	1             0       rh     "sf_surface_mosaic"        "1= mosaic, 0=no mosaic method, add by danli"      ""  
@@ -2547,6 +2609,7 @@ rconfig   integer ishallow                namelist,physics      1             0 
 rconfig   real    convtrans_avglen_m      namelist,physics      1             30      rh    "convtrans_avglen_m"  "averaging time for convective transport output variables (minutes)"      ""
 rconfig   integer num_land_cat            namelist,physics	1            21       -      "num_land_cat"                  ""      ""
 rconfig   integer use_wudapt_lcz          namelist,physics      1             0       -      "use_wudapt_lcz"                ""      ""
+rconfig   integer use_lcz_interpolation   namelist,physics      1             0       -      "use_lcz_interpolation"         ""      ""
 rconfig   logical slucm_distributed_drag  namelist,physics      1          .false.    rh      "slucm_distributed_drag"                ""      ""
 rconfig   integer distributed_ahe_opt     namelist,physics      1            0        rh     "distributed_ahe_opt" "AHE handling: 0= no AHE, 1=add to first level temperature tendency, 2=add to surface sensible heat flux" ""
 rconfig   integer num_soil_cat            namelist,physics	1            16       -      "num_soil_cat"                  ""      ""
@@ -3138,9 +3201,7 @@ package   sfclayscheme       sf_sfclay_physics==91       -             -
 
 package   noahucmscheme  sf_urban_physics==1         -             state:trb_urb4d,tw1_urb4d,tw2_urb4d,tgb_urb4d,sfw1_urb3d,sfw2_urb3d,sfr_urb3d,sfg_urb3d,a_u_bep,a_v_bep,a_t_bep,a_q_bep,a_e_bep,b_u_bep,b_v_bep,b_t_bep,b_q_bep,b_e_bep,dlg_bep,dl_u_bep,sf_bep,vl_bep,mh_urb2d,stdh_urb2d,lf_urb2d,lp_urb2d,hgt_urb2d,lb_urb2d,tgr_urb2d,cmcr_urb2d,drelr_urb2d,drelb_urb2d,drelg_urb2d,flxhumr_urb2d,flxhumb_urb2d,flxhumg_urb2d,tgrl_urb3d,smr_urb3d,cmgr_sfcdif,chgr_sfcdif,trl_urb3d,tgl_urb3d,tbl_urb3d,ahe,lf_urb2d_s,z0_urb2d,zd_urb2d
 package   bepscheme      sf_urban_physics==2         -             state:a_u_bep,a_v_bep,a_t_bep,a_q_bep,a_e_bep,b_u_bep,b_v_bep,b_t_bep,b_q_bep,b_e_bep,dlg_bep,dl_u_bep,sf_bep,vl_bep,trb_urb4d,tw1_urb4d,tw2_urb4d,tgb_urb4d,sfw1_urb3d,sfw2_urb3d,sfr_urb3d,sfg_urb3d,hi_urb2d,lp_urb2d,hgt_urb2d,lb_urb2d,trl_urb3d,tgl_urb3d,tbl_urb3d,tsk_rural
-package   bep_bemscheme  sf_urban_physics==3         -             state:a_u_bep,a_v_bep,a_t_bep,a_q_bep,a_e_bep,b_u_bep,b_v_bep,b_t_bep,b_q_bep,b_e_bep,dlg_bep,dl_u_bep,sf_bep,vl_bep,trb_urb4d,tw1_urb4d,tw2_urb4d,tgb_urb4d,tlev_urb3d,qlev_urb3d,tw1lev_urb3d,tw2lev_urb3d,tglev_urb3d,tflev_urb3d,sf_ac_urb3d,lf_ac_urb3d,cm_ac_urb3d,sfvent_urb3d,lfvent_urb3d,sfwin1_urb3d,sfwin2_urb3d,sfw1_urb3d,sfw2_urb3d,sfr_urb3d,sfg_urb3d,hi_urb2d,lp_urb2d,hgt_urb2d,lb_urb2d,trl_urb3d,tgl_urb3d,tbl_urb3d,tsk_rural,ep_pv_urb3d,t_pv_urb3d,trv_urb4d,qr_urb4d,qgr_urb3d,tgr_urb3d,drain_urb4d,draingr_urb3d,sfrv_urb3d,lfrv_urb3d,dgr_urb3d,dg_urb3d,lfr_urb3d,lfg_urb3d
-
-
+package   bep_bemscheme  sf_urban_physics==3         -             state:a_u_bep,a_v_bep,a_t_bep,a_q_bep,a_e_bep,b_u_bep,b_v_bep,b_t_bep,b_q_bep,b_e_bep,dlg_bep,dl_u_bep,sf_bep,vl_bep,trb_urb4d,tw1_urb4d,tw2_urb4d,tgb_urb4d,tlev_urb3d,qlev_urb3d,tw1lev_urb3d,tw2lev_urb3d,tglev_urb3d,tflev_urb3d,sf_ac_urb3d,lf_ac_urb3d,cm_ac_urb3d,sfvent_urb3d,lfvent_urb3d,sfwin1_urb3d,sfwin2_urb3d,sfw1_urb3d,sfw2_urb3d,sfr_urb3d,sfg_urb3d,hi_urb2d,lp_urb2d,hgt_urb2d,lb_urb2d,trl_urb3d,tgl_urb3d,tbl_urb3d,tsk_rural,ep_pv_urb3d,t_pv_urb3d,trv_urb4d,qr_urb4d,qgr_urb3d,tgr_urb3d,drain_urb4d,draingr_urb3d,sfrv_urb3d,lfrv_urb3d,dgr_urb3d,dg_urb3d,lfr_urb3d,lfg_urb3d,tmr_11,tmr_12,tmr_13,tmr_21,tmr_22,tmr_23,comf_10,comf_50,comf_90,ws_urb2d,bs_urb2d,tgv_urb4d,sfgv_urb3d,lfgv_urb3d,qg_urb4d
 package   nolsmscheme    sf_surface_physics==0       -             -
 package   slabscheme     sf_surface_physics==1       -             -
 package   lsmscheme      sf_surface_physics==2       -             state:flx4,fvb,fbur,fgsn,smcrel,xlaidyn
@@ -3160,9 +3221,9 @@ package   drip           sf_surf_irr_alloc==2        -             state:irrigat
 package   sprinkler      sf_surf_irr_alloc==3        -             state:irrigation,irr_rand_field
 
 
-package   lesscheme      bl_pbl_physics==0           -             -
+package   lesscheme      bl_pbl_physics==0           -             state:wu_tur,wv_tur,wt_tur,wq_tur
 package   ysuscheme      bl_pbl_physics==1           -             -
-package   myjpblscheme   bl_pbl_physics==2           -             state:tke_pbl,el_pbl
+package   myjpblscheme   bl_pbl_physics==2           -             state:tke_pbl,el_pbl,wu_tur,wv_tur,wt_tur,wq_tur
 package   gfsscheme      bl_pbl_physics==3           -             -
 package   qnsepblscheme  bl_pbl_physics==4           -             state:tke_pbl,el_pbl,massflux_EDKF,entr_EDKF,detr_EDKF,thl_up,thv_up,rv_up,rt_up,rc_up,u_up,v_up,frac_up,rc_mf
 package   mynnpblscheme  bl_pbl_physics==5           -             scalar:qke_adv;state:qke,tke_pbl,sh3d,sm3d,tsq,qsq,cov,el_pbl
@@ -3181,7 +3242,7 @@ package   mynn_dmp_edmf  bl_mynn_edmf==1             -             state:ktop_pl
 package   mynn_3Doutput  bl_mynn_output==1           -             state:edmf_a,edmf_w,edmf_thl,edmf_qt,edmf_ent,edmf_qc,sub_thl3D,sub_sqv3D,det_thl3D,det_sqv3D
 package   pbl_cloud      icloud_bl==1                -             state:cldfra_bl,qc_bl,qi_bl
 
-package   sms_3dtke      km_opt==5                   -             state:gamu,gamv,nlflux,dlk,l_diss,elmin,xkmv_meso
+package   sms_3dtke      km_opt==5                   -             state:gamu,gamv,nlflux,dlk,l_diss,elmin,xkmv_meso,wu_tur,wv_tur,wt_tur,wq_tur
 
 # dfi
 package   mynnpblscheme_dfi bl_pbl_physics_dfi==5   -             dfi_scalar:dfi_qke_adv
@@ -3405,6 +3466,7 @@ package   acc_phys_tend  acc_phy_tend==1             -            state:ATHMPTEN
 ### 8. Edit the Registry file and create a halo-exchange for x_1.
 
 # Halo Update Communications
+halo      HALO_EM_PHYS_BEP dyn_em 48:a_u_bep,b_u_bep,a_v_bep,b_v_bep
 halo      HALO_EM_INIT_1 dyn_em 48:u_1,u_2,v_1,v_2,w_1,w_2,ph_1,ph_2
 halo      HALO_EM_INIT_2 dyn_em 48:t_1,t_2,mu_1,mu_2,tke_1,tke_2,ww,phb
 halo      HALO_EM_INIT_3 dyn_em 48:ph0,php,t_init,mub,mu0,p,al,alt,alb
