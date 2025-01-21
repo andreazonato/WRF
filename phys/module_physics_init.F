@@ -86,7 +86,8 @@ CONTAINS
                          APR_CAPMA,APR_CAPME,APR_CAPMI,          &
                          XICE,XICEM,VEGFRA,SNOW,CANWAT,SMSTAV,   &
                          SMSTOT, SFCRUNOFF,UDRUNOFF,GRDFLX,ACSNOW,&
-                         ACSNOM,IVGTYP,ISLTYP, SFCEVP, SMOIS,    &
+                         ACSNOM,IVGTYP,URBAN_VEGETATION,LANDMASK,&
+                         ISLTYP, SFCEVP, SMOIS,                  &
                          SH2O, SNOWH, SMFR3D,                    &  ! temporary
                          SNOALB,                                 &
                          DX,DY,DX2D,AREA2D,                      &
@@ -153,7 +154,7 @@ CONTAINS
                          XXXG_URB2D, XXXC_URB2D,                 & !Optional urban
                          TRL_URB3D, TBL_URB3D, TGL_URB3D,        & !Optional urban
                          SH_URB2D, LH_URB2D, G_URB2D, RN_URB2D,  & !Optional urban
-                         TS_URB2D, FRC_URB2D, UTYPE_URB2D,       & !Optional urban
+                         TS_URB2D, FRC_URB2D,FAD_URB3D, UTYPE_URB2D,       & !Optional urban
                          CMCR_URB2D,TGR_URB2D,TGRL_URB3D,SMR_URB3D, & !Optional urban
                          DRELR_URB2D,DRELB_URB2D,DRELG_URB2D,    & !Optional urban
                          FLXHUMR_URB2D,FLXHUMB_URB2D,            & !Optional urban
@@ -171,6 +172,8 @@ CONTAINS
                          TRV_URB4D,QR_URB4D,QGR_URB3D,TGR_URB3D,         & !GRZ
                          DRAIN_URB4D,DRAINGR_URB3D,SFRV_URB3D,           & !GRZ
                          LFRV_URB3D,DGR_URB3D,DG_URB3D,LFR_URB3D,LFG_URB3D,&!GRZ
+                         TGV_URB4D,SFGV_URB3D,LFGV_URB3D,QG_URB4D,& !GARDEN
+                         BW_URB2D,SW_URB2D,                      &
                          LP_URB2D,HI_URB2D,LB_URB2D,             & !Optional multi-layer urban
                          HGT_URB2D,MH_URB2D,STDH_URB2D,          & !Optional multi-layer urban
                          LF_URB2D,                               & !Optional multi-layer urban
@@ -368,6 +371,8 @@ CONTAINS
                                                          XICEM, &
                                                         VEGFRA, &
                                                         ACSNOM
+   INTEGER, DIMENSION( ims:ime, jms:jme ),INTENT(INOUT)::URBAN_VEGETATION
+   REAL,DIMENSION( ims:ime, jms:jme ),INTENT(INOUT)::LANDMASK
    REAL,    DIMENSION( ims:ime, jms:jme ), OPTIONAL, INTENT(INOUT) ::   rliq    
 
    REAL,    DIMENSION( ims:ime, jms:jme )                     , &
@@ -654,7 +659,8 @@ CONTAINS
    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: G_URB2D !urban
    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: RN_URB2D !urban
    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: TS_URB2D !urban
-   REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: FRC_URB2D !urban
+   REAL, OPTIONAL, DIMENSION( ims:ime,kms:kme, jms:jme ), INTENT(INOUT) :: FRC_URB2D !urban
+   REAL, OPTIONAL, DIMENSION( ims:ime,kms:kme, jms:jme ), INTENT(INOUT) :: FAD_URB3D !urban
    INTEGER, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: UTYPE_URB2D !urban
 
    INTEGER , INTENT(IN)        :: num_urban_ndm
@@ -704,7 +710,13 @@ CONTAINS
    REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_zdf, jms:jme ),INTENT(INOUT) :: DG_URB3D !GRZ
    REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_zdf, jms:jme ),INTENT(INOUT) :: LFR_URB3D !GRZ
    REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: LFG_URB3D !GRZ
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_gd, jms:jme ), INTENT(INOUT) :: TGV_URB4D !GARDEN
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_gd, jms:jme ), INTENT(INOUT) :: QG_URB4D !GARDEN
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SFGV_URB3D !GARDEN
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: LFGV_URB3D !GARDEN
    REAL, OPTIONAL, DIMENSION( ims:ime,1:num_urban_hi, jms:jme), INTENT(INOUT) :: HI_URB2D  !multi-layer UCM
+   REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: BW_URB2D  !multi-layer UCM
+   REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: SW_URB2D  !multi-layer UCM
    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LP_URB2D  !multi-layer UCM
    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LB_URB2D  !multi-layer UCM
    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: HGT_URB2D !multi-layer UCM
@@ -1432,7 +1444,8 @@ CHARACTER(LEN=8) :: name
                 EXCH_H,VEGFRA,                                  &
                 SNOW,SNOWC, CANWAT,SMSTAV,                      &
                 SMSTOT, SFCRUNOFF,UDRUNOFF,ACSNOW,ACSNOM,       &
-                IVGTYP,ISLTYP,ISURBAN,SMOIS,SMFR3D,MAVAIL,      &
+                IVGTYP,URBAN_VEGETATION,LANDMASK,LU_INDEX,      &
+                ISLTYP,ISURBAN,SMOIS,SMFR3D,MAVAIL,      &
                 SNOWH,SH2O,SNOALB,FNDSOILW,FNDSNOWH,RDMAXALB,   &
 #if (NMM_CORE == 1)
                 Z0,XLAND,XICE,                                  &
@@ -1487,7 +1500,7 @@ CHARACTER(LEN=8) :: name
                 XXXR_URB2D,XXXB_URB2D,XXXG_URB2D,XXXC_URB2D,    & !Optional urban
                 TRL_URB3D, TBL_URB3D, TGL_URB3D,                & !Optional urban
                 SH_URB2D, LH_URB2D, G_URB2D, RN_URB2D,          & !Optional urban
-                TS_URB2D, FRC_URB2D, UTYPE_URB2D,               & 
+                TS_URB2D, FRC_URB2D,FAD_URB3D, UTYPE_URB2D,               & 
                 SF_URBAN_PHYSICS,                               & !Optional urban
                 CMCR_URB2D,TGR_URB2D,TGRL_URB3D,SMR_URB3D,      & !Optional urban
                 DRELR_URB2D,DRELB_URB2D,DRELG_URB2D,            & !Optional urban
@@ -1517,6 +1530,8 @@ CHARACTER(LEN=8) :: name
                 TRV_URB4D,QR_URB4D,QGR_URB3D,TGR_URB3D,         & !GRZ
                 DRAIN_URB4D,DRAINGR_URB3D,SFRV_URB3D,           & !GRZ
                 LFRV_URB3D,DGR_URB3D,DG_URB3D,LFR_URB3D,LFG_URB3D,&!GRZ
+                TGV_URB4D,SFGV_URB3D,LFGV_URB3D,QG_URB4D,& !GARDEN
+                BW_URB2D,SW_URB2D,                              &
                 LP_URB2D,HI_URB2D,LB_URB2D,                     & !Optional multi-layer urban
                 HGT_URB2D,MH_URB2D,STDH_URB2D,                  & !Optional multi-layer urban
                 LF_URB2D,                                       & !Optional multi-layer urban
@@ -2467,7 +2482,8 @@ CHARACTER(LEN=8) :: name
                 EXCH_H,VEGFRA,                                  &
                 SNOW,SNOWC, CANWAT,SMSTAV,                      &
                 SMSTOT, SFCRUNOFF,UDRUNOFF,ACSNOW,ACSNOM,       &
-                IVGTYP,ISLTYP,ISURBAN,SMOIS,SMFR3D,mavail,      &
+                IVGTYP,URBAN_VEGETATION,LANDMASK,LU_INDEX,      &
+                ISLTYP,ISURBAN,SMOIS,SMFR3D,mavail,      &
                 SNOWH,SH2O,SNOALB,FNDSOILW,FNDSNOWH,RDMAXALB,   &
 #if  ( NMM_CORE == 1 )
                 Z0,XLAND,XICE,DX,DY,                            &
@@ -2520,7 +2536,7 @@ CHARACTER(LEN=8) :: name
                 XXXR_URB2D,XXXB_URB2D,XXXG_URB2D,XXXC_URB2D,    & !Optional urban
                 TRL_URB3D, TBL_URB3D, TGL_URB3D,                & !Optional urban
                 SH_URB2D,LH_URB2D,G_URB2D,RN_URB2D,             & !Optional urban
-                TS_URB2D, FRC_URB2D, UTYPE_URB2D,               &
+                TS_URB2D, FRC_URB2D,FAD_URB3D, UTYPE_URB2D,               &
                 SF_URBAN_PHYSICS,                               & !Optional urban
                 CMCR_URB2D,TGR_URB2D,TGRL_URB3D,SMR_URB3D,      & !Optional urban
                 DRELR_URB2D,DRELB_URB2D,DRELG_URB2D,            & !Optional urban
@@ -2550,6 +2566,8 @@ CHARACTER(LEN=8) :: name
                 TRV_URB4D,QR_URB4D,QGR_URB3D,TGR_URB3D,         & !GRZ
                 DRAIN_URB4D,DRAINGR_URB3D,SFRV_URB3D,           & !GRZ
                 LFRV_URB3D,DGR_URB3D,DG_URB3D,LFR_URB3D,LFG_URB3D,&!GRZ
+                TGV_URB4D,SFGV_URB3D,LFGV_URB3D,QG_URB4D,& !GARDEN
+                BW_URB2D,SW_URB2D,                              &
                 LP_URB2D,HI_URB2D,LB_URB2D,                     & !Optional multi-layer urban
                 HGT_URB2D,MH_URB2D,STDH_URB2D,                  & !Optional multi-layer urban
                 LF_URB2D,                                       & !Optional multi-layer urban
@@ -2879,6 +2897,7 @@ CHARACTER(LEN=8) :: name
     REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: RN_URB2D !Optional urban
     REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: TS_URB2D !Optional urban
     REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: FRC_URB2D !Optional urban
+    REAL, OPTIONAL, DIMENSION( ims:ime, kms:kme,jms:jme ), INTENT(INOUT) :: FAD_URB3D !Optional urban
     INTEGER, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: UTYPE_URB2D !Optional urban
 !    REAL, DIMENSION( ims:ime, 1:num_roof_layers, jms:jme ), INTENT(INOUT) :: TRL_URB3D !Optional urban
 !    REAL, DIMENSION( ims:ime, 1:num_wall_layers, jms:jme ), INTENT(INOUT) :: TBL_URB3D !Optional urban
@@ -2936,7 +2955,13 @@ CHARACTER(LEN=8) :: name
    REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_zdf, jms:jme ),INTENT(INOUT) :: DG_URB3D !GRZ
    REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_zdf, jms:jme ),INTENT(INOUT) :: LFR_URB3D !GRZ
    REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: LFG_URB3D !GRZ
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_gd, jms:jme ), INTENT(INOUT) :: TGV_URB4D !GARDEN
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_gd, jms:jme ), INTENT(INOUT) :: QG_URB4D !GARDEN
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SFGV_URB3D !GARDEN
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: LFGV_URB3D !GARDEN
     REAL, OPTIONAL, DIMENSION( ims:ime,1:num_urban_hi, jms:jme ), INTENT(INOUT) :: HI_URB2D  !multi-layer UCM
+    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: BW_URB2D  !multi-layer UCM
+    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: SW_URB2D  !multi-layer UCM
     REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LP_URB2D  !multi-layer UCM
     REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LB_URB2D  !multi-layer UCM
     REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: HGT_URB2D !multi-layer UCM
@@ -3076,9 +3101,10 @@ CHARACTER(LEN=8) :: name
   REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_soil_layers*mosaic_cat, jms:jme ), INTENT(INOUT) :: TRL_URB3D_mosaic
   REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_soil_layers*mosaic_cat, jms:jme ), INTENT(INOUT) :: TBL_URB3D_mosaic
   REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_soil_layers*mosaic_cat, jms:jme ), INTENT(INOUT) :: TGL_URB3D_mosaic  
-   
+  INTEGER,DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: URBAN_VEGETATION
+  REAL,DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LANDMASK,LU_INDEX 
   REAL :: xice_threshold   ! lake input
-  REAL :: max_utype_urb2d   
+  REAL :: max_utype_urb2d,max_frc_urb,INDEX_VEGETATION   
   LOGICAL :: IPRINT
   
 !-------------------------------------------------
@@ -3287,11 +3313,20 @@ CHARACTER(LEN=8) :: name
 
 !URBAN
           IF ((SF_URBAN_PHYSICS.eq.1).OR.(SF_URBAN_PHYSICS.EQ.2).OR.(SF_URBAN_PHYSICS.EQ.3)) THEN
-
+             
              IF ( PRESENT( FRC_URB2D ) .AND. PRESENT( UTYPE_URB2D )) THEN
                 CALL urban_param_init(DZR,DZB,DZG,num_soil_layers,             & !urban
                                 sf_urban_physics,config_flags%use_wudapt_lcz,  &
-                                config_flags%slucm_distributed_drag) 
+                                config_flags%slucm_distributed_drag)    !urban
+                IF(config_flags%use_lcz_interpolation.eq.1)then
+                CALL wudapt_interpolation(id,its,ite,jts,jte,ims,ime,jms,jme,kms,kme,         &
+                                          ids,ide,jds,jde,config_flags%ISWATER,config_flags%sf_surface_physics,  &
+                                          NLCAT,num_urban_hi,nurbm,                         &
+                                          LCZ_1,LCZ_2,LCZ_3,LCZ_4,LCZ_5,                   &
+                                          LCZ_6,LCZ_7,LCZ_8,LCZ_9,LCZ_10,LCZ_11,           &
+                                          BW_URB2D,HI_URB2D,SW_URB2D,HGT_URB2D,            &
+                                          FRC_URB2D,LANDUSEF,IVGTYP,LU_INDEX,URBAN_VEGETATION,LANDMASK,XLAND) 
+                ENDIF
                 
                 CALL urban_var_init(ISURBAN,TSK,TSLB,TMN,IVGTYP,               & !urban
                               ims,ime,jms,jme,kms,kme,num_soil_layers,         & !urban
@@ -3326,6 +3361,7 @@ CHARACTER(LEN=8) :: name
                               TRV_URB4D,QR_URB4D,QGR_URB3D,TGR_URB3D,          & !GRZ
                               DRAIN_URB4D,DRAINGR_URB3D,SFRV_URB3D,            & !GRZ
                               LFRV_URB3D,DGR_URB3D,DG_URB3D,LFR_URB3D,LFG_URB3D,&!GRZ
+                              TGV_URB4D,SFGV_URB3D,LFGV_URB3D,QG_URB4D,& !GARDEN
                               SMOIS,                                           & !GRZ
                               LP_URB2D,HI_URB2D,LB_URB2D,                      & !urban
                               HGT_URB2D,MH_URB2D,STDH_URB2D,                   & !urban
@@ -3337,7 +3373,7 @@ CHARACTER(LEN=8) :: name
                               A_E_BEP,B_U_BEP,B_V_BEP,                         & !multi-layer urban
                               B_T_BEP,B_Q_BEP,B_E_BEP,DLG_BEP,                 & !multi-layer urban
                               DL_U_BEP,SF_BEP,VL_BEP,                          & !multi-layer urban
-                              FRC_URB2D, UTYPE_URB2D,config_flags%use_wudapt_lcz)  !urban
+                              FRC_URB2D, UTYPE_URB2D,config_flags%use_wudapt_lcz,BW_URB2D,SW_URB2D)  !urban
           
 
                max_utype_urb2d = maxval(UTYPE_URB2D)*1.0
@@ -3401,7 +3437,7 @@ CALL lsm_mosaic_init(IVGTYP,config_flags%ISWATER,config_flags%ISURBAN,config_fla
              CALL wrf_error_fatal ( 'NoahMP does not work with NLCD data. Stop.' )
           ENDIF
 
-          CALL NOAHMP_INIT(MMINLU, SNOW,SNOWH,CANWAT,ISLTYP,IVGTYP,XLAT,                 &
+          CALL NOAHMP_INIT(MMINLU, SNOW,SNOWH,CANWAT,ISLTYP,IVGTYP,URBAN_VEGETATION,XLAT,                 &
                      TSLB,SMOIS,SH2O,DZS, FNDSOILW, FNDSNOWH,          &
                      TSK,isnowxy  ,tvxy     ,tgxy     ,canicexy ,TMN,XICE,                  &
                      canliqxy ,eahxy    ,tahxy    ,cmxy     ,chxy     ,                     &
@@ -3433,8 +3469,38 @@ CALL lsm_mosaic_init(IVGTYP,config_flags%ISWATER,config_flags%ISURBAN,config_fla
           IF ((SF_URBAN_PHYSICS.eq.1).OR.(SF_URBAN_PHYSICS.EQ.2).OR.(SF_URBAN_PHYSICS.EQ.3)) THEN
              IF ( PRESENT( FRC_URB2D ) .AND. PRESENT( UTYPE_URB2D )) THEN
                 CALL urban_param_init(DZR,DZB,DZG,num_soil_layers,                   & !urban
-                                sf_urban_physics,config_flags%use_wudapt_lcz,        &
-                                config_flags%slucm_distributed_drag)
+                                      sf_urban_physics,config_flags%use_wudapt_lcz,        &
+                                      config_flags%slucm_distributed_drag)
+                IF(config_flags%use_lcz_interpolation.eq.1)then
+                CALL wudapt_interpolation(id,its,ite,jts,jte,ims,ime,jms,jme,kms,kme,         &
+                                          ids,ide,jds,jde,config_flags%ISWATER, config_flags%sf_surface_physics,           &
+                                          NLCAT,num_urban_hi,nurbm,                         &
+                                          LCZ_1_TABLE,LCZ_2_TABLE,LCZ_3_TABLE,LCZ_4_TABLE,LCZ_5_TABLE,                   &
+                                          LCZ_6_TABLE,LCZ_7_TABLE,LCZ_8_TABLE,LCZ_9_TABLE,LCZ_10_TABLE,LCZ_11_TABLE,           &
+                                          BW_URB2D,HI_URB2D,SW_URB2D,HGT_URB2D,            &
+                                          FRC_URB2D,LANDUSEF,IVGTYP,LU_INDEX,URBAN_VEGETATION,LANDMASK,XLAND)
+                
+                ENDIF
+#if ( defined( DM_PARALLEL ) && ( ! defined( STUBMPI ) ) )
+               max_frc_urb= wrf_dm_max_real(maxval(FRC_URB2D)*1.0)
+#endif
+               if(max_frc_urb>0.)then
+               DO j=jts,jte
+               DO i=its,ite
+               IF(IVGTYP(i,j)>LCZ_1_TABLE .and.FRC_URB2D(i,j).eq.0)then
+               INDEX_VEGETATION=0.
+               print*,'GLOBUS'
+               do K=1,LCZ_1-1
+               if(LANDUSEF(I,K,J).gt.INDEX_VEGETATION)then
+               INDEX_VEGETATION=LANDUSEF(I,K,J)
+               IVGTYP(I,J)=K
+               LU_INDEX(I,J)=K
+               endif
+               enddo 
+               ENDIF
+               ENDDO
+               ENDDO
+               endif
                 CALL urban_var_init(ISURBAN,TSK,TSLB,TMN,IVGTYP,               & !urban
                               ims,ime,jms,jme,kms,kme,num_soil_layers,         & !urban
                               LCZ_1_TABLE,LCZ_2_TABLE,LCZ_3_TABLE,LCZ_4_TABLE, & !urban
@@ -3469,6 +3535,7 @@ CALL lsm_mosaic_init(IVGTYP,config_flags%ISWATER,config_flags%ISURBAN,config_fla
                               TRV_URB4D,QR_URB4D,QGR_URB3D,TGR_URB3D,          & !GRZ
                               DRAIN_URB4D,DRAINGR_URB3D,SFRV_URB3D,            & !GRZ
                               LFRV_URB3D,DGR_URB3D,DG_URB3D,LFR_URB3D,LFG_URB3D,&!GRZ
+                              TGV_URB4D,SFGV_URB3D,LFGV_URB3D,QG_URB4D,& !GARDEN
                               SMOIS,                                           & 
                               LP_URB2D,HI_URB2D,LB_URB2D,                      & !urban
                               HGT_URB2D,MH_URB2D,STDH_URB2D,                   & !urban
@@ -3480,7 +3547,7 @@ CALL lsm_mosaic_init(IVGTYP,config_flags%ISWATER,config_flags%ISURBAN,config_fla
                               A_E_BEP,B_U_BEP,B_V_BEP,                         & !multi-layer urban
                               B_T_BEP,B_Q_BEP,B_E_BEP,DLG_BEP,                 & !multi-layer urban
                               DL_U_BEP,SF_BEP,VL_BEP,                          & !multi-layer urban
-                              FRC_URB2D, UTYPE_URB2D,config_flags%use_wudapt_lcz)!urban
+                              FRC_URB2D, UTYPE_URB2D,config_flags%use_wudapt_lcz,BW_URB2D,SW_URB2D)!urban
 
                max_utype_urb2d = maxval(UTYPE_URB2D)*1.0
 #if ( defined( DM_PARALLEL ) && ( ! defined( STUBMPI ) ) )

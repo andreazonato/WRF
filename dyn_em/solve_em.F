@@ -203,7 +203,7 @@ SUBROUTINE solve_em ( grid , config_flags  &
 
 ! variables for flux-averaging code 20091223
    CHARACTER*256                              :: message, message2, message3
-   REAL                                       :: old_dt
+   REAL                                       :: old_dt,dt_mean
    TYPE(WRFU_Time)                            :: temp_time, CurrTime, restart_time
    INTEGER, PARAMETER                         :: precision = 100
    INTEGER                                    :: num, den
@@ -2035,6 +2035,20 @@ BENCH_END(small_step_finish_tim)
 
 ! tracer
 
+   IF(config_flags%tracer_opt.eq.2)THEN
+      DO ij = 1 , grid%num_tiles
+      call release_tracer(config_flags%bl_pbl_physics,grid%itimestep,config_flags%sf_urban_physics,grid%ivgtyp,tracer,grid%dt,grid%dx,&
+                              & P_tr17_1,P_tr17_2,P_tr17_3,P_tr17_4,    &
+                              & P_tr17_5,P_tr17_6,P_tr17_7,P_tr17_8,    &
+                              & ids, ide, jds, jde, kds, kde,           &
+                              & ims, ime, jms, jme, kms, kme,           &
+                              & grid%i_start(ij), grid%i_end(ij),       &
+                              & grid%j_start(ij),grid%j_end(ij),        &
+                              &   k_start    , k_end)
+
+
+     ENDDO
+     ENDIF
        IF ((config_flags%tracer_adv_opt /= ORIGINAL .and. config_flags%tracer_adv_opt /= WENO_SCALAR) .and. (rk_step == rk_order)) THEN
 
          !$OMP PARALLEL DO   &
@@ -3489,6 +3503,86 @@ BENCH_END(bc_end_tim)
    ENDIF
 #endif
 !-----------------------------------------------------------
+!-----------------------------------------------------------
+!AVERGING
+    dt_mean=1200.
+    if(grid%itimestep.le.1)then
+     grid%passec=grid%dt
+     print*,'FIRST TIME OLD',grid%passec
+    endif
+
+   tmpTimeInterval = domain_get_current_time ( grid ) - domain_get_sim_start_time(grid )
+   curr_secs = real_time(tmpTimeInterval)
+   IF (curr_secs .ge. (grid%passec+ dt_mean)) THEN
+   write(*,*)'put to zero',' curr_secs',curr_secs,'time_old',grid%passec,'grid_id',grid%id
+    grid%avgflx_count = 0
+    grid%passec=curr_secs
+    CALL wrf_debug(200,'In solve_em, before zero_mean call')
+  !$OMP PARALLEL DO   &
+  !$OMP PRIVATE ( ij )
+    DO ij = 1 , grid%num_tiles
+    CALL zero_mean(grid%u_10_mean,grid%v_10_mean,grid%t_2_mean,      &
+         &   grid%u_mean,grid%v_mean,grid%wspv_mean,grid%th_mean, &
+         &   grid%tt_mean,                                        &
+         &   grid%uu_mean,grid%vv_mean,grid%ww_mean,              &
+         &   grid%uv_mean,grid%uw_mean,grid%vw_mean,               &
+         &   grid%ut_mean,grid%vt_mean,grid%wt_mean, &
+         &    grid%tke_mean,grid%tke_pbl_mean,grid%diss_pbl_mean,grid%tpe_pbl_mean, &
+         &   grid%exch_m_mean,grid%exch_h_mean,      &
+         &   grid%wt_tur_mean,grid%wu_tur_mean,grid%wv_tur_mean, &
+         &   grid%xkhv_mean,grid%xkmv_mean,          &
+         &   grid%xkhh_mean,grid%xkmh_mean,          &
+         &   grid%tr1_mean,grid%tr2_mean,          &
+         &   grid%tr3_mean,grid%tr4_mean,          &
+         &   grid%tr5_mean,grid%tr6_mean,          &
+         &   grid%tr7_mean,grid%tr8_mean,          &
+         &   ids, ide, jds, jde, kds, kde,           &
+         &   ims, ime, jms, jme, kms, kme,           &
+         &   grid%i_start(ij), grid%i_end(ij), grid%j_start(ij), grid%j_end(ij),&
+         &   k_start    , k_end)
+     ENDDO
+  !$OMP END PARALLEL DO
+    ENDIF
+
+  !$OMP PARALLEL DO   &
+  !$OMP PRIVATE ( ij )
+    DO ij = 1 , grid%num_tiles
+
+    CALL wrf_debug(200,'In solve_em, avg_mean call')
+    CALL avg_mean(grid%u_10_mean,grid%v_10_mean,grid%t_2_mean,                        &
+         &   grid%avgflx_count,grid%u_mean,grid%v_mean,grid%wspv_mean,grid%th_mean, &
+         &   grid%tt_mean,                           &
+         &   grid%uu_mean,grid%vv_mean,grid%ww_mean, &
+         &   grid%uv_mean,grid%uw_mean,grid%vw_mean, &
+         &   grid%ut_mean,grid%vt_mean,grid%wt_mean, &
+         &   grid%tke_mean,grid%tke_pbl_mean,        &
+         &   grid%diss_pbl_mean,grid%tpe_pbl_mean,   &
+         &   grid%exch_m_mean,grid%exch_h_mean,      &
+         &   grid%wt_tur_mean,grid%wu_tur_mean,grid%wv_tur_mean, &
+         &   grid%xkhv_mean,grid%xkmv_mean,          &
+         &   grid%xkhh_mean,grid%xkmh_mean,          &
+         &   grid%tr1_mean,grid%tr2_mean,          &
+         &   grid%tr3_mean,grid%tr4_mean,          &
+         &   grid%tr5_mean,grid%tr6_mean,          &
+         &   grid%tr7_mean,grid%tr8_mean,          &
+         &   ids, ide, jds, jde, kds, kde,           &
+         &   ims, ime, jms, jme, kms, kme,           &
+         &   grid%i_start(ij), grid%i_end(ij), grid%j_start(ij), grid%j_end(ij),&
+         &   k_start    , k_end, &
+         &   grid%u10,grid%v10,grid%t2,                                       &
+         &   grid%u_phy,grid%v_phy,grid%w_2,grid%t_2,grid%tke_2,grid%tke_pbl, &
+         &   grid%diss_pbl,grid%tpe_pbl,grid%exch_m,grid%exch_h, &
+         &   grid%wt_tur,grid%wu_tur,grid%wv_tur,grid%xkhv,grid%xkmv, &
+         &   grid%xkhh,grid%xkmh,tracer, &
+         & P_tr17_1,P_tr17_2,P_tr17_3,P_tr17_4,    &
+         & P_tr17_5,P_tr17_6,P_tr17_7,P_tr17_8)
+
+ENDDO
+!$OMP END PARALLEL DO
+grid%avgflx_count = grid%avgflx_count +1
+
+!END AVERAGING
+
 
    IF (config_flags%do_avgflx_em .EQ. 1) THEN
 ! Reinitialize time-averaged fluxes if history output was written after the previous time step:
@@ -4994,3 +5088,302 @@ BENCH_END(bc_2d_tim)
    RETURN
 
 END SUBROUTINE solve_em
+
+!!!!!!!!!!!!!!!==========================!!!!!!!!!!!!!!!
+subroutine release_tracer(bl_pbl,itimestep,urb_phys,ivgtyp,tracer,dt,dx, &
+                              & P_tr17_1, P_tr17_2, P_tr17_3, P_tr17_4, &
+                              & P_tr17_5, P_tr17_6, P_tr17_7, P_tr17_8, &
+                              & ids, ide, jds, jde, kds, kde,           &
+                              & ims, ime, jms, jme, kms, kme,           &
+                              & its, ite, jts, jte, kts, kte)
+
+IMPLICIT NONE
+
+INTEGER , INTENT(IN)        :: ids, ide, jds, jde, kds, kde,  &
+                               ims, ime, jms, jme, kms, kme,  &
+                               its, ite, jts, jte, kts, kte
+INTEGER, INTENT(IN)         :: urb_phys,bl_pbl
+REAL,    INTENT(IN)         :: dx
+REAL       , DIMENSION (ims:ime,kms:kme,jms:jme,*),  INTENT(INOUT) :: tracer
+INTEGER    , DIMENSION (ims:ime,jms:jme),       INTENT(IN)    :: ivgtyp
+INTEGER  i_start,i_end,j_start,j_end,k_start,k_end
+INTEGER    , INTENT(INOUT) :: P_tr17_1, P_tr17_2, P_tr17_3, P_tr17_4
+INTEGER    , INTENT(INOUT) :: P_tr17_5, P_tr17_6, P_tr17_7, P_tr17_8
+REAL dt,reso,quantity
+INTEGER :: i,j,k,itimestep
+
+      quantity=1.
+      reso=1000./dx
+      i_start = its
+      i_end   = min(ite,ide-1)
+      j_start = jts
+      j_end   = min(jte,jde-1)
+      k_start = kts
+      k_end   = kte-1
+
+    do k = k_start, k_start
+    do i = i_start, i_end
+    do j = j_start,j_end
+      if(itimestep.eq.1)then
+      tracer(i,k,j,P_tr17_1)=0.
+      tracer(i,k,j,P_tr17_2)=0.
+      tracer(i,k,j,P_tr17_3)=0.
+      tracer(i,k,j,P_tr17_4)=0.
+      tracer(i,k,j,P_tr17_5)=0.
+      tracer(i,k,j,P_tr17_6)=0.
+      tracer(i,k,j,P_tr17_7)=0.
+      tracer(i,k,j,P_tr17_8)=0.
+      endif
+
+      tracer(i,k,j,P_tr17_1)=max(0., tracer(i,k,j,P_tr17_1))
+      tracer(i,k,j,P_tr17_2)=max(0., tracer(i,k,j,P_tr17_2))
+      tracer(i,k,j,P_tr17_3)=max(0., tracer(i,k,j,P_tr17_3))
+      tracer(i,k,j,P_tr17_4)=max(0., tracer(i,k,j,P_tr17_4))
+      tracer(i,k,j,P_tr17_5)=max(0., tracer(i,k,j,P_tr17_5))
+      tracer(i,k,j,P_tr17_6)=max(0., tracer(i,k,j,P_tr17_6))
+      tracer(i,k,j,P_tr17_7)=max(0., tracer(i,k,j,P_tr17_7))
+      tracer(i,k,j,P_tr17_8)=max(0., tracer(i,k,j,P_tr17_8))
+    enddo
+    enddo
+    enddo
+    do i = i_start, i_end
+    do j = j_start,j_end
+    if(i.eq.100*reso.and.j.eq.25*reso)then
+      tracer(i,kts,j,P_tr17_2)=  tracer(i,kts,j,P_tr17_2)+quantity*dt
+    endif
+     if(i.eq.100*reso .and.j.eq.20*reso)then
+      tracer(i,kts,j,P_tr17_3)=  tracer(i,kts,j,P_tr17_3)+quantity*dt
+    endif
+     if(i.eq.100*reso.and.j.eq.40*reso)then
+     tracer(i,kts,j,P_tr17_4)=  tracer(i,kts,j,P_tr17_4)+quantity*dt
+    endif
+     if(i.eq.95*reso.and.j.eq.25*reso)then
+     tracer(i,kts,j,P_tr17_5)=  tracer(i,kts,j,P_tr17_5)+quantity*dt
+    endif
+     if(i.eq.105*reso.and.j.eq.25*reso)then
+      tracer(i,kts,j,P_tr17_6)=  tracer(i,kts,j,P_tr17_6)+quantity*dt
+    endif
+    enddo
+    enddo
+return
+end subroutine release_tracer
+
+
+
+subroutine zero_mean(u_10_mean,v_10_mean,t_2_mean,   &
+         &   u_mean,v_mean,wspv_mean,th_mean, &
+         &   tt_mean,                 &
+         &   uu_mean,vv_mean,ww_mean, &
+         &   uv_mean,uw_mean,vw_mean, &
+         &   ut_mean,vt_mean,wt_mean, &
+         &   tke_mean,tke_pbl_mean,           &
+         &   diss_pbl_mean,tpe_pbl_mean, &
+         &   exch_m_mean,exch_h_mean,         &
+         &   wt_tur_mean,wu_tur_mean,wv_tur_mean,  &
+         &   xkhv_mean,xkmv_mean,                  &
+         &   xkhh_mean,xkmh_mean,          &
+         &   tr1_mean,tr2_mean,          &
+         &   tr3_mean,tr4_mean,          &
+         &   tr5_mean,tr6_mean,          &
+         &   tr7_mean,tr8_mean,          &
+         & ids, ide, jds, jde, kds, kde,           &
+         & ims, ime, jms, jme, kms, kme,           &
+         & its, ite, jts, jte, kts, kte)
+
+IMPLICIT NONE
+
+INTEGER , INTENT(IN)        :: ids, ide, jds, jde, kds, kde,  &
+ ims, ime, jms, jme, kms, kme,  &
+ its, ite, jts, jte, kts, kte
+
+REAL,     DIMENSION( ims:ime , kms:kme , jms:jme ) , INTENT(INOUT) ::    &
+            u_mean,v_mean,wspv_mean,th_mean, &
+            tt_mean,                 &
+            uu_mean,vv_mean,ww_mean, &
+            uv_mean,uw_mean,vw_mean, &
+            ut_mean,vt_mean,wt_mean, &
+            tke_mean,tke_pbl_mean,  &
+            diss_pbl_mean,tpe_pbl_mean, &
+            wt_tur_mean,wu_tur_mean,wv_tur_mean,  &
+            exch_m_mean,exch_h_mean,            &
+            xkhv_mean,xkmv_mean, &
+            xkhh_mean,xkmh_mean,          &
+            tr1_mean,tr2_mean,          &
+            tr3_mean,tr4_mean,          &
+            tr5_mean,tr6_mean,          &
+            tr7_mean,tr8_mean
+
+REAL, DIMENSION(ims:ime,jme:jme), INTENT(INOUT) :: u_10_mean,v_10_mean,t_2_mean
+
+INTEGER :: i,j,k
+     u_10_mean = 0.
+     v_10_mean = 0.
+     t_2_mean = 0.
+     u_mean = 0.
+     v_mean = 0.
+     wspv_mean = 0.
+     th_mean = 0.
+     tt_mean = 0.
+     uu_mean = 0.
+     vv_mean  = 0.
+     ww_mean  = 0.
+     uv_mean  = 0.
+     uw_mean  = 0.
+     vw_mean  = 0.
+     ut_mean  = 0.
+     vt_mean  = 0.
+     wt_mean  = 0.
+     tke_mean  = 0.
+     tke_pbl_mean  = 0.
+     diss_pbl_mean = 0.
+     tpe_pbl_mean = 0.
+     exch_h_mean = 0.
+     exch_m_mean = 0.
+     wt_tur_mean = 0.
+     wu_tur_mean = 0.
+     wv_tur_mean = 0.
+     xkhv_mean   = 0.
+     xkmv_mean   = 0.
+     xkhh_mean  = 0.
+     xkmh_mean  = 0.
+     tr1_mean  =0.
+     tr2_mean  =0.
+     tr3_mean  =0.
+     tr4_mean  =0.
+     tr5_mean  =0.
+     tr6_mean  = 0.
+     tr7_mean  =0.
+     tr8_mean  =0.
+return
+end subroutine zero_mean
+
+!!!!!!!!!!!!!!!==========================!!!!!!!!!!!!!!!
+subroutine avg_mean(u_10_mean,v_10_mean,t_2_mean,  &
+         &   mean_count,u_mean,v_mean,wspv_mean,th_mean, &
+         &   tt_mean, &
+         &   uu_mean,vv_mean,ww_mean, &
+         &   uv_mean,uw_mean,vw_mean, &
+         &   ut_mean,vt_mean,wt_mean, &
+         &   tke_mean,tke_pbl_mean,                &
+         &   diss_pbl_mean,tpe_pbl_mean,           &
+         & exch_m_mean,exch_h_mean,                &
+         &   wt_tur_mean,wu_tur_mean,wv_tur_mean,  &
+         &   xkhv_mean,xkmv_mean,                  &
+         &   xkhh_mean,xkmh_mean,          &
+         &   tr1_mean,tr2_mean,          &
+         &   tr3_mean,tr4_mean,          &
+         &   tr5_mean,tr6_mean,          &
+         &   tr7_mean,tr8_mean,          &  
+         & ids, ide, jds, jde, kds, kde,           &
+         & ims, ime, jms, jme, kms, kme,           &
+         & its, ite, jts, jte, kts, kte,           &
+         & u10,v10,t2,                             &
+         & u,v,w,t,tke,tke_pbl,diss_pbl,tpe_pbl,   &
+         & exch_m,exch_h,                          &
+         & wt_tur,wu_tur,wv_tur,xkhv,xkmv,         &
+         & xkhh,xkmh,tracer, &
+         & P_tr17_1,P_tr17_2,P_tr17_3,P_tr17_4,    &
+         & P_tr17_5,P_tr17_6,P_tr17_7,P_tr17_8)
+
+IMPLICIT NONE
+
+INTEGER , INTENT(IN)        :: ids, ide, jds, jde, kds, kde,  &
+                               ims, ime, jms, jme, kms, kme,  &
+                                its, ite, jts, jte, kts, kte
+
+REAL,     DIMENSION( ims:ime , kms:kme , jms:jme ) , INTENT(INOUT) ::    &
+            u_mean,v_mean,wspv_mean,th_mean,tt_mean, &
+            uu_mean,vv_mean,ww_mean, &
+            uv_mean,uw_mean,vw_mean, &
+            ut_mean,vt_mean,wt_mean, &
+            tke_mean,tke_pbl_mean,   &
+            diss_pbl_mean,tpe_pbl_mean, &
+            exch_m_mean,exch_h_mean, &
+            wt_tur_mean,wu_tur_mean,wv_tur_mean, &
+            xkhv_mean,xkmv_mean,                 &
+            xkhh_mean,xkmh_mean,          &
+            tr1_mean,tr2_mean,          &
+            tr3_mean,tr4_mean,          &
+            tr5_mean,tr6_mean,          &
+            tr7_mean,tr8_mean 
+REAL,     DIMENSION( ims:ime , kms:kme , jms:jme ) , INTENT(IN) :: u,v,w,t,tke,tke_pbl,diss_pbl,tpe_pbl,exch_m,exch_h
+REAL,     DIMENSION( ims:ime , kms:kme , jms:jme ) , INTENT(IN) :: wt_tur,wu_tur,wv_tur,xkhv,xkmv,xkhh,xkmh
+INTEGER    , INTENT(INOUT) :: P_tr17_1, P_tr17_2, P_tr17_3, P_tr17_4
+INTEGER    , INTENT(INOUT) :: P_tr17_5, P_tr17_6, P_tr17_7, P_tr17_8
+REAL       , DIMENSION (ims:ime,kms:kme,jms:jme,*),  INTENT(IN) :: tracer
+real um(ims:ime , kms:kme , jms:jme ),wm(ims:ime , kms:kme , jms:jme),vm(ims:ime, kms:kme , jms:jme )
+REAL, DIMENSION(ims:ime,jms:jme), INTENT(INOUT) :: u10,v10,t2,u_10_mean,v_10_mean,t_2_mean
+integer mean_count,i_start,i_end,j_start,j_end,k_start,k_end
+
+
+INTEGER :: i,j,k
+
+
+    i_start = its
+    i_end   = min( ite,ide-1 )
+    j_start = jts
+    j_end   = min( jte,jde-1 )
+    k_start = kts
+    k_end = min( kte, kde-1 )
+
+
+
+    do j = j_start,j_end
+    do k = k_start, k_end
+    do i = i_start, i_end
+       wm(i,k,j) = (w(i,k,j)+w(i,k+1,j))/2.
+   enddo
+   enddo
+   enddo
+  um=u
+  vm=v
+    do i = i_start, i_end
+    do j = j_start,j_end
+              u_10_mean(i,j)=(mean_count*u_10_mean(i,j)+u10(i,j))/(mean_count+1.)
+              v_10_mean(i,j) =(mean_count*v_10_mean(i,j)+v10(i,j))/(mean_count+1.)
+              t_2_mean(i,j)=(mean_count*t_2_mean(i,j)+t2(i,j))/(mean_count+1.)
+    do k = k_start, k_end
+             u_mean(i,k,j) =(mean_count*u_mean(i,k,j)+um(i,k,j))/(mean_count+1.)
+             v_mean(i,k,j) =(mean_count*v_mean(i,k,j)+vm(i,k,j))/(mean_count+1.)
+             wspv_mean(i,k,j)=(mean_count*wspv_mean(i,k,j)+wm(i,k,j))/(mean_count+1.)
+             tt_mean(i,k,j)=(mean_count*tt_mean(i,k,j)+t(i,k,j)*t(i,k,j))/(mean_count+1.)
+             th_mean(i,k,j)=(mean_count*th_mean(i,k,j)+t(i,k,j))/(mean_count+1.)
+             uu_mean(i,k,j)=(mean_count*uu_mean(i,k,j)+um(i,k,j)*um(i,k,j))/(mean_count+1.)
+             vv_mean(i,k,j)=(mean_count*vv_mean(i,k,j)+vm(i,k,j)*vm(i,k,j))/(mean_count+1.)
+             ww_mean(i,k,j)=(mean_count*ww_mean(i,k,j)+wm(i,k,j)*wm(i,k,j))/(mean_count+1.)
+             uw_mean(i,k,j)=(mean_count*uw_mean(i,k,j)+um(i,k,j)*wm(i,k,j))/(mean_count+1.)
+             vw_mean(i,k,j)=(mean_count*vw_mean(i,k,j)+vm(i,k,j)*wm(i,k,j))/(mean_count+1.)
+             uv_mean(i,k,j)=(mean_count*uv_mean(i,k,j)+um(i,k,j)*vm(i,k,j))/(mean_count+1.)
+             ut_mean(i,k,j)=(mean_count*ut_mean(i,k,j)+um(i,k,j)*t(i,k,j))/(mean_count+1.)
+             vt_mean(i,k,j)=(mean_count*vt_mean(i,k,j)+vm(i,k,j)*t(i,k,j))/(mean_count+1.)
+             wt_mean(i,k,j)=(mean_count*wt_mean(i,k,j)+wm(i,k,j)*t(i,k,j))/(mean_count+1.)
+             wt_tur_mean(i,k,j)=(mean_count*wt_tur_mean(i,k,j)+wt_tur(i,k,j))/(mean_count+1.)
+             wu_tur_mean(i,k,j)=(mean_count*wu_tur_mean(i,k,j)+wu_tur(i,k,j))/(mean_count+1.)
+             wv_tur_mean(i,k,j)=(mean_count*wv_tur_mean(i,k,j)+wv_tur(i,k,j))/(mean_count+1.)
+             tke_mean(i,k,j)=(mean_count*tke_mean(i,k,j)+tke(i,k,j))/(mean_count+1.)
+             tke_pbl_mean(i,k,j)=(mean_count*tke_pbl_mean(i,k,j)+tke_pbl(i,k,j))/(mean_count+1.)
+             exch_m_mean(i,k,j)=(mean_count*exch_m_mean(i,k,j)+exch_m(i,k,j))/(mean_count+1.)
+             exch_h_mean(i,k,j)=(mean_count*exch_h_mean(i,k,j)+exch_h(i,k,j))/(mean_count+1.)
+             xkhv_mean(i,k,j)=(mean_count*xkhv_mean(i,k,j)+xkhv(i,k,j))/(mean_count+1.)
+             xkmv_mean(i,k,j)=(mean_count*xkmv_mean(i,k,j)+xkmv(i,k,j))/(mean_count+1.)
+             diss_pbl_mean(i,k,j)=(mean_count*diss_pbl_mean(i,k,j)+diss_pbl(i,k,j))/(mean_count+1.)
+             tpe_pbl_mean(i,k,j)=(mean_count*tpe_pbl_mean(i,k,j)+tpe_pbl(i,k,j))/(mean_count+1.)
+             xkhh_mean(i,k,j)=(mean_count*xkhh_mean(i,k,j)+xkhh(i,k,j))/(mean_count+1.)
+             xkmh_mean(i,k,j)=(mean_count*xkmh_mean(i,k,j)+xkmh(i,k,j))/(mean_count+1.)
+             tr1_mean(i,k,j)=(mean_count*tr1_mean(i,k,j)+tracer(i,k,j,P_tr17_1))/(mean_count+1.)
+             tr2_mean(i,k,j)=(mean_count*tr2_mean(i,k,j)+tracer(i,k,j,P_tr17_2))/(mean_count+1.)
+             tr3_mean(i,k,j)=(mean_count*tr3_mean(i,k,j)+tracer(i,k,j,P_tr17_3))/(mean_count+1.)
+             tr4_mean(i,k,j)=(mean_count*tr4_mean(i,k,j)+tracer(i,k,j,P_tr17_4))/(mean_count+1.)
+             tr5_mean(i,k,j)=(mean_count*tr5_mean(i,k,j)+tracer(i,k,j,P_tr17_5))/(mean_count+1.)
+             tr6_mean(i,k,j)=(mean_count*tr6_mean(i,k,j)+tracer(i,k,j,P_tr17_6))/(mean_count+1.)
+             tr7_mean(i,k,j)=(mean_count*tr7_mean(i,k,j)+tracer(i,k,j,P_tr17_7))/(mean_count+1.)
+             tr8_mean(i,k,j)=(mean_count*tr8_mean(i,k,j)+tracer(i,k,j,P_tr17_8))/(mean_count+1.)
+
+    enddo
+     enddo
+    enddo
+
+    return
+  end subroutine avg_mean
+
+
