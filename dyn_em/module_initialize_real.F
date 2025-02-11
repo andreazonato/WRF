@@ -3150,7 +3150,7 @@ integer::oops1,oops2
          DO j = jts , MIN(jde-1,jte)
             DO i = its , MIN(ide-1,ite)
               IF ( MMINLU == 'NLCD40' .OR. MMINLU == 'MODIFIED_IGBP_MODIS_NOAH') THEN
-                  IF ( grid%FRC_URB2D(i,j) .GE. 0.5 .AND.  &
+                  IF ( grid%FRC_URB2D(i,j) .GE. 0.5 .AND.  config_flags%use_wudapt_lcz.eq.0 .AND. &
                       (grid%ivgtyp(i,j).NE.13 .AND. grid%ivgtyp(i,j).NE.24 .AND. grid%ivgtyp(i,j).NE.25 .AND. grid%ivgtyp(i,j).NE.26 .AND. grid%ivgtyp(i,j).LT.30)) grid%ivgtyp(i,j)=13
               ELSE IF ( MMINLU == "USGS" ) THEN
                   IF ( grid%FRC_URB2D(i,j) .GE. 0.5 .AND.  &

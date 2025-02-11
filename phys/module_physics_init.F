@@ -110,7 +110,7 @@ CONTAINS
                          urban_map_gbd,                          &
                          urban_map_fbd,                          &
                          urban_map_zgrd,                         &
-                         NUM_URBAN_HI,                           &
+                         num_urban_hi,                           &
                          raincv_a,raincv_b,                      &
                          gd_cloud,gd_cloud2,                     & 
                          gd_cloud_a,gd_cloud2_a,                 &
@@ -715,8 +715,8 @@ CONTAINS
    REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SFGV_URB3D !GARDEN
    REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: LFGV_URB3D !GARDEN
    REAL, OPTIONAL, DIMENSION( ims:ime,1:num_urban_hi, jms:jme), INTENT(INOUT) :: HI_URB2D  !multi-layer UCM
-   REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: BW_URB2D  !multi-layer UCM
-   REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: SW_URB2D  !multi-layer UCM
+   REAL, OPTIONAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: BW_URB2D  !multi-layer UCM
+   REAL, OPTIONAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SW_URB2D  !multi-layer UCM
    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LP_URB2D  !multi-layer UCM
    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LB_URB2D  !multi-layer UCM
    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: HGT_URB2D !multi-layer UCM
@@ -2653,10 +2653,13 @@ CHARACTER(LEN=8) :: name
    USE module_bl_acm
    USE module_sf_myjsfc
    USE module_sf_qnsesfc
-   USE module_sf_noahdrv
    USE module_sf_noahlsm, only : LCZ_1,LCZ_2,LCZ_3,LCZ_4,LCZ_5,LCZ_6,LCZ_7,LCZ_8,LCZ_9,LCZ_10,LCZ_11
+  
+   USE module_sf_noahdrv
    USE module_sf_noahmpdrv
-   USE noahmp_tables, ONLY: LCZ_1_TABLE,LCZ_2_TABLE,LCZ_3_TABLE,LCZ_4_TABLE,LCZ_5_TABLE,LCZ_6_TABLE,LCZ_7_TABLE,LCZ_8_TABLE,LCZ_9_TABLE,LCZ_10_TABLE,LCZ_11_TABLE
+   USE module_sf_noahmplsm
+   USE noahmp_tables, ONLY:read_mp_veg_parameters,LCZ_1_TABLE,LCZ_2_TABLE,LCZ_3_TABLE,LCZ_4_TABLE,LCZ_5_TABLE,LCZ_6_TABLE,LCZ_7_TABLE,LCZ_8_TABLE,LCZ_9_TABLE,LCZ_10_TABLE,LCZ_11_TABLE
+#  
 #ifdef WRF_USE_CLM
    USE module_sf_clm, only : clminit
 #endif
@@ -2960,8 +2963,8 @@ CHARACTER(LEN=8) :: name
    REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SFGV_URB3D !GARDEN
    REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: LFGV_URB3D !GARDEN
     REAL, OPTIONAL, DIMENSION( ims:ime,1:num_urban_hi, jms:jme ), INTENT(INOUT) :: HI_URB2D  !multi-layer UCM
-    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: BW_URB2D  !multi-layer UCM
-    REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: SW_URB2D  !multi-layer UCM
+    REAL, OPTIONAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: BW_URB2D  !multi-layer UCM
+    REAL, OPTIONAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SW_URB2D  !multi-layer UCM
     REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LP_URB2D  !multi-layer UCM
     REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LB_URB2D  !multi-layer UCM
     REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: HGT_URB2D !multi-layer UCM
@@ -3131,7 +3134,6 @@ CHARACTER(LEN=8) :: name
   endif
  
 !-- calculate pbl time step
-
    STEPBL = nint(BLDT*60./DT)
    STEPBL = max(STEPBL,1)
 !-- initialization
@@ -3285,7 +3287,7 @@ CHARACTER(LEN=8) :: name
                      its,ite, jts,jte, kts,kte                     )
 
 #endif
-      CASE (LSMSCHEME)
+CASE (LSMSCHEME)
           
           IF(TRIM(mminlu) .EQ. 'NLCD40')THEN
             CALL wrf_message('Using NLCD40 for Noah, redefine urban categories ')
@@ -3296,7 +3298,50 @@ CHARACTER(LEN=8) :: name
             ENDDO
             ENDDO
           ENDIF
- 
+
+           CALL  SOIL_VEG_GEN_PARM( MMINLU,'STAS')
+          
+           IF (SF_URBAN_PHYSICS.ge.1) THEN
+           IF ( PRESENT( FRC_URB2D ) .AND. PRESENT( UTYPE_URB2D )) THEN
+             
+                 CALL urban_param_init(DZR, DZB, DZG, num_soil_layers,                                   & !urban
+                      sf_urban_physics, config_flags%use_wudapt_lcz,                    &
+                      config_flags%slucm_distributed_drag)
+           
+            IF((SF_URBAN_PHYSICS.EQ.2.OR.SF_URBAN_PHYSICS.EQ.3).and.config_flags%use_wudapt_lcz.eq.1)THEN
+                 IF(config_flags%urban_morphology_type .EQ. 1) THEN
+                        CALL wudapt_majority(its,ite,jts,jte,ims,ime,jms,jme,         &
+                             ids,ide,jds,jde,     &
+                            nlcat,num_urban_hi, nurbm, num_urban_ndm,                       &
+                            LCZ_1,LCZ_11,                                      &
+                            LP_URB2D, LB_URB2D,                                &
+                            BW_URB2D, SW_URB2D, HGT_URB2D, HI_URB2D,                        &
+                            FRC_URB2D, LANDUSEF,                                            &
+                            IVGTYP, URBAN_VEGETATION,config_flags%urban_veg_opt,config_flags%ISWATER)
+                  ELSEIF (config_flags%urban_morphology_type .EQ. 2) THEN
+                        CALL wudapt_interpolation(its,ite,jts,jte,ims,ime,jms,jme,         &
+                             ids,ide,jds,jde,     &
+                             config_flags%ISWATER,config_flags%sf_surface_physics, NLCAT,  &
+                             num_urban_hi, nurbm,num_urban_ndm,                        &
+                             LCZ_1,LCZ_11,                                             &
+                             LP_URB2D,LB_URB2D,                                        &
+                             BW_URB2D, HI_URB2D, SW_URB2D, HGT_URB2D,                  &
+                             FRC_URB2D, LANDUSEF, IVGTYP, LU_INDEX,                    &
+                             URBAN_VEGETATION,config_flags%urban_veg_opt, LANDMASK, XLAND)
+                ELSEIF(config_flags%urban_morphology_type .EQ. 3) THEN
+
+                CALL MERGE_LANDUSE_WITH_MORPHOLOGY(its,ite,jts,jte,ims,ime,jms,jme,         &
+                                   ids,ide,jds,jde,     &
+                                   nurbm, num_urban_hi, num_urban_ndm,NLCAT,        &
+                                   LCZ_1,LCZ_11,                            &
+                                   LANDUSEF, FRC_URB2D, SW_URB2D, BW_URB2D,         &
+                                   LP_URB2D, LB_URB2D, HI_URB2D, HGT_URB2D,         &
+                                   IVGTYP, LU_INDEX, URBAN_VEGETATION,config_flags%urban_veg_opt, &
+                                    config_flags%ISWATER)
+                 ENDIF
+             ENDIF      
+             ENDIF 
+             ENDIF      
           CALL LSMINIT(VEGFRA,SNOW,SNOWC,SNOWH,CANWAT,SMSTAV,  &
                      SMSTOT, SFCRUNOFF,UDRUNOFF,ACSNOW,        &
                      ACSNOM,IVGTYP,ISLTYP,TSLB,SMOIS,SH2O,ZS,DZS, &
@@ -3310,23 +3355,12 @@ CHARACTER(LEN=8) :: name
                      its,ite, jts,jte, kts,kte                 &
                      )
 
-
 !URBAN
           IF ((SF_URBAN_PHYSICS.eq.1).OR.(SF_URBAN_PHYSICS.EQ.2).OR.(SF_URBAN_PHYSICS.EQ.3)) THEN
              
              IF ( PRESENT( FRC_URB2D ) .AND. PRESENT( UTYPE_URB2D )) THEN
-                CALL urban_param_init(DZR,DZB,DZG,num_soil_layers,             & !urban
-                                sf_urban_physics,config_flags%use_wudapt_lcz,  &
-                                config_flags%slucm_distributed_drag)    !urban
-                IF(config_flags%use_lcz_interpolation.eq.1)then
-                CALL wudapt_interpolation(id,its,ite,jts,jte,ims,ime,jms,jme,kms,kme,         &
-                                          ids,ide,jds,jde,config_flags%ISWATER,config_flags%sf_surface_physics,  &
-                                          NLCAT,num_urban_hi,nurbm,                         &
-                                          LCZ_1,LCZ_2,LCZ_3,LCZ_4,LCZ_5,                   &
-                                          LCZ_6,LCZ_7,LCZ_8,LCZ_9,LCZ_10,LCZ_11,           &
-                                          BW_URB2D,HI_URB2D,SW_URB2D,HGT_URB2D,            &
-                                          FRC_URB2D,LANDUSEF,IVGTYP,LU_INDEX,URBAN_VEGETATION,LANDMASK,XLAND) 
-                ENDIF
+            
+                
                 
                 CALL urban_var_init(ISURBAN,TSK,TSLB,TMN,IVGTYP,               & !urban
                               ims,ime,jms,jme,kms,kme,num_soil_layers,         & !urban
@@ -3389,7 +3423,6 @@ CHARACTER(LEN=8) :: name
                  ('USING URBPARM_LCZ.TBL WITH OLD 3 URBAN CLASSES. SET USE_WUDAPT_LCZ=0')
                ENDIF
 
-
              ELSE
                 CALL wrf_error_fatal ( 'arguments not present for calling urban model' )
              ENDIF
@@ -3433,11 +3466,56 @@ CALL lsm_mosaic_init(IVGTYP,config_flags%ISWATER,config_flags%ISURBAN,config_fla
 !
 
       CASE (NOAHMPSCHEME)
+
           IF ( TRIM(mminlu) .EQ. 'NLCD40' ) THEN
              CALL wrf_error_fatal ( 'NoahMP does not work with NLCD data. Stop.' )
           ENDIF
+           
+           call read_mp_veg_parameters(trim(MMINLU))
+           
+           IF ((SF_URBAN_PHYSICS.ge.1)) THEN
+           IF ( PRESENT( FRC_URB2D ) .AND. PRESENT( UTYPE_URB2D )) THEN
+             
+                 CALL urban_param_init(DZR, DZB, DZG, num_soil_layers,                                   & !urban
+                      sf_urban_physics, config_flags%use_wudapt_lcz,                    &
+                      config_flags%slucm_distributed_drag)
 
-          CALL NOAHMP_INIT(MMINLU, SNOW,SNOWH,CANWAT,ISLTYP,IVGTYP,URBAN_VEGETATION,XLAT,                 &
+           IF((SF_URBAN_PHYSICS.EQ.2.OR.SF_URBAN_PHYSICS.EQ.3).and.config_flags%use_wudapt_lcz.EQ.1)THEN
+                 IF(config_flags%urban_morphology_type .EQ. 1) THEN
+                        CALL wudapt_majority(its,ite,jts,jte,ims,ime,jms,jme,         &
+                            ids,ide,jds,jde,                                       &
+                            nlcat,num_urban_hi, nurbm, num_urban_ndm,                       &
+                            LCZ_1_TABLE,LCZ_11_TABLE,                         &
+                            LP_URB2D, LB_URB2D,                                            &
+                            BW_URB2D, SW_URB2D, HGT_URB2D, HI_URB2D,                        &
+                            FRC_URB2D, LANDUSEF,                                            &
+                            IVGTYP, URBAN_VEGETATION,config_flags%urban_veg_opt,config_flags%ISWATER)
+           
+                  ELSEIF (config_flags%urban_morphology_type .EQ. 2) THEN
+                        CALL wudapt_interpolation(its,ite,jts,jte,ims,ime,jms,jme,         &
+                             ids,ide,jds,jde,                                              &
+                             config_flags%ISWATER,config_flags%sf_surface_physics, NLCAT,  &
+                             num_urban_hi, nurbm,num_urban_ndm,                        &
+                             LCZ_1_TABLE,LCZ_11_TABLE,                   &
+                             LP_URB2D,LB_URB2D,                                        &
+                             BW_URB2D, HI_URB2D, SW_URB2D, HGT_URB2D,                  &
+                             FRC_URB2D, LANDUSEF, IVGTYP, LU_INDEX,                    &
+                             URBAN_VEGETATION,config_flags%urban_veg_opt, LANDMASK, XLAND)
+                ELSEIF(config_flags%urban_morphology_type .EQ. 3) THEN
+
+                CALL MERGE_LANDUSE_WITH_MORPHOLOGY(its,ite,jts,jte,ims,ime,jms,jme,         &
+                                   ids,ide,jds,jde,                                 &
+                                   nurbm, num_urban_hi, num_urban_ndm,NLCAT,        &
+                                   LCZ_1_TABLE,LCZ_11_TABLE,          &
+                                   LANDUSEF, FRC_URB2D, SW_URB2D, BW_URB2D,         &
+                                   LP_URB2D, LB_URB2D, HI_URB2D, HGT_URB2D,         &
+                                   IVGTYP, LU_INDEX, URBAN_VEGETATION,config_flags%urban_veg_opt, config_flags%ISWATER)
+                ENDIF
+            ENDIF
+            ENDIF
+            ENDIF
+
+               CALL NOAHMP_INIT(MMINLU, SNOW,SNOWH,CANWAT,ISLTYP,IVGTYP,URBAN_VEGETATION,XLAT,                 &
                      TSLB,SMOIS,SH2O,DZS, FNDSOILW, FNDSNOWH,          &
                      TSK,isnowxy  ,tvxy     ,tgxy     ,canicexy ,TMN,XICE,                  &
                      canliqxy ,eahxy    ,tahxy    ,cmxy     ,chxy     ,                     &
@@ -3466,41 +3544,12 @@ CALL lsm_mosaic_init(IVGTYP,config_flags%ISWATER,config_flags%ISURBAN,config_fla
 #endif
                      )
 
-          IF ((SF_URBAN_PHYSICS.eq.1).OR.(SF_URBAN_PHYSICS.EQ.2).OR.(SF_URBAN_PHYSICS.EQ.3)) THEN
-             IF ( PRESENT( FRC_URB2D ) .AND. PRESENT( UTYPE_URB2D )) THEN
-                CALL urban_param_init(DZR,DZB,DZG,num_soil_layers,                   & !urban
-                                      sf_urban_physics,config_flags%use_wudapt_lcz,        &
-                                      config_flags%slucm_distributed_drag)
-                IF(config_flags%use_lcz_interpolation.eq.1)then
-                CALL wudapt_interpolation(id,its,ite,jts,jte,ims,ime,jms,jme,kms,kme,         &
-                                          ids,ide,jds,jde,config_flags%ISWATER, config_flags%sf_surface_physics,           &
-                                          NLCAT,num_urban_hi,nurbm,                         &
-                                          LCZ_1_TABLE,LCZ_2_TABLE,LCZ_3_TABLE,LCZ_4_TABLE,LCZ_5_TABLE,                   &
-                                          LCZ_6_TABLE,LCZ_7_TABLE,LCZ_8_TABLE,LCZ_9_TABLE,LCZ_10_TABLE,LCZ_11_TABLE,           &
-                                          BW_URB2D,HI_URB2D,SW_URB2D,HGT_URB2D,            &
-                                          FRC_URB2D,LANDUSEF,IVGTYP,LU_INDEX,URBAN_VEGETATION,LANDMASK,XLAND)
-                
-                ENDIF
-#if ( defined( DM_PARALLEL ) && ( ! defined( STUBMPI ) ) )
-               max_frc_urb= wrf_dm_max_real(maxval(FRC_URB2D)*1.0)
-#endif
-               if(max_frc_urb>0.)then
-               DO j=jts,jte
-               DO i=its,ite
-               IF(IVGTYP(i,j)>LCZ_1_TABLE .and.FRC_URB2D(i,j).eq.0)then
-               INDEX_VEGETATION=0.
-               print*,'GLOBUS'
-               do K=1,LCZ_1-1
-               if(LANDUSEF(I,K,J).gt.INDEX_VEGETATION)then
-               INDEX_VEGETATION=LANDUSEF(I,K,J)
-               IVGTYP(I,J)=K
-               LU_INDEX(I,J)=K
-               endif
-               enddo 
-               ENDIF
-               ENDDO
-               ENDDO
-               endif
+         
+           IF ((SF_URBAN_PHYSICS.eq.1).OR.(SF_URBAN_PHYSICS.EQ.2).OR.(SF_URBAN_PHYSICS.EQ.3)) THEN
+           IF ( PRESENT( FRC_URB2D ) .AND. PRESENT( UTYPE_URB2D )) THEN
+                           
+                 
+   
                 CALL urban_var_init(ISURBAN,TSK,TSLB,TMN,IVGTYP,               & !urban
                               ims,ime,jms,jme,kms,kme,num_soil_layers,         & !urban
                               LCZ_1_TABLE,LCZ_2_TABLE,LCZ_3_TABLE,LCZ_4_TABLE, & !urban
@@ -3564,9 +3613,9 @@ CALL lsm_mosaic_init(IVGTYP,config_flags%ISWATER,config_flags%ISURBAN,config_fla
                ENDIF
 
 
-             ELSE
+          ELSE
                 CALL wrf_error_fatal ( 'arguments not present for calling urban model' )
-             ENDIF
+          ENDIF
           ENDIF
 
       CASE (RUCLSMSCHEME)
@@ -5786,5 +5835,7 @@ subroutine interp_vec_cu(locvec,locwant,periodic,loc1,loc2,wght1,wght2)
    END IF
 
   END SUBROUTINE shalwater_init
+
+
 
 END MODULE module_physics_init

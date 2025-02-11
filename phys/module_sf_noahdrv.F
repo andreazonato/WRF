@@ -707,7 +707,7 @@ CONTAINS
    REAL, DIMENSION(its:ite,jts:jte) :: RL_UP_URB
    REAL, DIMENSION(its:ite,jts:jte) ::RS_ABS_URB
    REAL, DIMENSION(its:ite,jts:jte) ::GRDFLX_URB
-   REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: BW_URB2D,SW_URB2D
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: BW_URB2D,SW_URB2D
    REAL :: SIGMA_SB,RL_UP_RURAL,RL_UP_TOT,RS_ABS_TOT,UMOM,VMOM
    REAL :: CMR_URB, CHR_URB, CMC_URB, CHC_URB, CMGR_URB, CHGR_URB
    REAL :: frc_urb,lb_urb
@@ -985,19 +985,11 @@ CONTAINS
                       IVGTYP(I,J) == LCZ_3      .or. IVGTYP(I,J) == LCZ_4 .or. IVGTYP(I,J) == LCZ_5 .or. &
                       IVGTYP(I,J) == LCZ_6      .or. IVGTYP(I,J) == LCZ_7 .or. IVGTYP(I,J) == LCZ_8 .or. &
                       IVGTYP(I,J) == LCZ_9      .or. IVGTYP(I,J) == LCZ_10 .or. IVGTYP(I,J) == LCZ_11 ) THEN
-                 IF(URBAN_VEGETATION(I,J).gt.0)THEN
-                 VEGTYP = URBAN_VEGETATION(I,J)
-                 SHDFAC = SHDTBL(VEGTYP)
-                 ELSE	
-		 VEGTYP = NATURAL
-                 SHDFAC = SHDTBL(NATURAL)
-                 ALBEDOK =0.2         !  0.2
-                 ALBBRD  =0.2         !0.2
-                 EMISSI = 0.98                                 !for VEGTYP=5
-                 ENDIF
-                 LWDN   = GLW(I,J) * EMISSI
-                 SOLNET = SOLDN * (1.0 - ALBEDOK)
-                   
+                  IF(URBAN_VEGETATION(I,J).gt.0)THEN  
+                  VEGTYP = URBAN_VEGETATION(I,J)
+                  ELSE
+                  VEGTYP = NATURAL
+                  ENDIF 
 		 IF ( FRC_URB2D(I,J) < 0.99 ) THEN
                    if(sf_urban_physics.eq.1)then
                      T1= ( TSK(I,J) -FRC_URB2D(I,J) * TS_URB2D (I,J) )/ (1-FRC_URB2D(I,J))
@@ -1670,8 +1662,9 @@ CONTAINS
          end do
         
 
-       CALL BEP_BEM(TSK, nsoil,dzs,tslb,smois,                        &
-                BW_URB2D,SW_URB2D,frc_urb2d,fad_urb3d,pv_frc_urb2d,gr_frc_urb2d, &
+       CALL BEP_BEM(TSK, nsoil,dzs,tslb,smois,                         &
+                BW_URB2D,SW_URB2D,frc_urb2d,hi_urb2d,                  &
+                fad_urb3d,pv_frc_urb2d,gr_frc_urb2d,                   &
                 garden_frc_urb2d,albr_urb2d,                           &
                 utype_urb2d,itimestep,dz8w,dt,u_phy,v_phy, &
                 th_phy,rho,p_phy,swdown,glw,                           &
@@ -1694,7 +1687,6 @@ CONTAINS
                 comf_10,comf_50,comf_90,                               &
                 hist_comf,num_urban_ncomf,                             &
                 rainbl,swddir,swddif,                                  & !RMS
-                lp_urb2d,hi_urb2d,lb_urb2d,hgt_urb2d,                  &
                 a_u_bep,a_v_bep,a_t_bep,                               &
                 a_e_bep,b_u_bep,b_v_bep,                               &
                 b_t_bep,b_e_bep,b_q_bep,dlg_bep,                       &
@@ -3506,7 +3498,20 @@ SUBROUTINE lsm_mosaic(DZ8W,QV3D,P8W3D,T3D,TSK,                      &
  
       		      T1= TS_RUL2D_mosaic(I,mosaic_i,J)
                        
-                 ENDIF
+               ENDIF
+            ELSE
+               IF( IVGTYP(I,J) == ISURBAN    .or. IVGTYP(I,J) == LCZ_1 .or. IVGTYP(I,J) == LCZ_2 .or. &
+                   IVGTYP(I,J) == LCZ_3      .or. IVGTYP(I,J) == LCZ_4 .or. IVGTYP(I,J) == LCZ_5 .or. &
+                   IVGTYP(I,J) == LCZ_6      .or. IVGTYP(I,J) == LCZ_7 .or. IVGTYP(I,J) == LCZ_8 .or. &
+                   IVGTYP(I,J) == LCZ_9      .or. IVGTYP(I,J) == LCZ_10 .or. IVGTYP(I,J) == LCZ_11 ) THEN
+                       Noah_call = .TRUE.
+                        VEGTYP = NATURAL
+                        SHDFAC = SHDTBL(NATURAL)
+
+               ENDIF
+                
+
+
       
             ENDIF
 

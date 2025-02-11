@@ -272,7 +272,7 @@ CONTAINS
      &          ,urban_map_fbd                                        & !multi-layer urban
      &          ,urban_map_zgrd                                       & !multi-layer urban
      &          ,num_urban_hi                                         & !multi-layer urban
-     &          ,use_wudapt_lcz,use_lcz_interpolation                 & !wudapt
+     &          ,use_wudapt_lcz,urban_morphology_type,urban_veg_opt   & !
      &          ,slucm_distributed_drag                         & !SLUCM
      &          ,tsk_rural                                            & !multi-layer urban
      &          ,trb_urb4d,tw1_urb4d,tw2_urb4d,tgb_urb4d              & !multi-layer urban
@@ -966,7 +966,8 @@ CONTAINS
    INTEGER , INTENT(IN)        ::     urban_map_zgrd
    INTEGER, INTENT(IN )::   NUM_URBAN_HI
    INTEGER, INTENT(IN )::   use_wudapt_lcz
-   INTEGER, INTENT(IN )::   use_lcz_interpolation
+   INTEGER, INTENT(IN )::   urban_morphology_type
+   INTEGER, INTENT(IN )::   urban_veg_opt
    LOGICAL, INTENT(IN )::   slucm_distributed_drag
    REAL, OPTIONAL, DIMENSION( ims:ime,                     jms:jme ), INTENT(INOUT) :: tsk_rural
    REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_zrd, jms:jme ), INTENT(INOUT) :: trb_urb4d
@@ -1044,8 +1045,8 @@ CONTAINS
    REAL, OPTIONAL, DIMENSION( ims:ime, kms:kme, jms:jme ), INTENT(INOUT) ::dlg_bep   !Height above ground
    REAL, OPTIONAL, DIMENSION( ims:ime, kms:kme, jms:jme ), INTENT(INOUT) ::sf_bep  !Fraction air at the face of grid cell
    REAL, OPTIONAL, DIMENSION( ims:ime, kms:kme, jms:jme ), INTENT(INOUT) ::dl_u_bep  !Length scale
-   real,optional,dimension( ims:ime, jms:jme ), INTENT(INOUT) :: BW_URB2D
-   real,optional,dimension( ims:ime, jms:jme ), INTENT(INOUT) :: SW_URB2D
+   real,optional,dimension( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: BW_URB2D
+   real,optional,dimension( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SW_URB2D
 !  arguments for Ocean Mixed Layer Model
    REAL, DIMENSION( ims:ime , jms:jme ), OPTIONAL, INTENT(INOUT )::   TML, T0ML, HML, H0ML, HUML, HVML
    REAL, DIMENSION( ims:ime , jms:jme ), OPTIONAL, INTENT(IN    )::   F, TMOML

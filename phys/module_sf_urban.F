@@ -2597,50 +2597,254 @@ ENDIF
    deallocate(road_width)
 
    END SUBROUTINE urban_param_init
-SUBROUTINE wudapt_interpolation(id,its,ite,jts,jte,ims,ime,jms,jme,kms,kme,         &
-                                   ids,ide,jds,jde,ISWATER,SF_PHYSICS,                         &
-                                   NLCAT,num_urban_hi,nurbm,                        &
-                                   LCZ_1,LCZ_2,LCZ_3,LCZ_4,LCZ_5,                   &
-                                   LCZ_6,LCZ_7,LCZ_8,LCZ_9,LCZ_10,LCZ_11,           &
+!===========================================================================
+
+SUBROUTINE merge_landuse_with_morphology(its,ite,jts,jte,ims,ime,jms,jme,ids,ide,jds,jde, &
+                                         nurbm, num_urban_hi, num_urban_ndm,NLCAT,      &
+                                         LCZ_1,LCZ_11,                          &
+                                         LANDUSEF, FRC_URB2D, SW_URB2D, BW_URB2D,       &
+                                         LP_URB2D, LB_URB2D, HI_URB2D, HGT_URB2D,       &
+                                         IVGTYP, LU_INDEX, URBAN_VEGETATION,urban_veg_opt, ISWATER)
+   IMPLICIT NONE
+
+   ! Variable declarations
+   INTEGER, INTENT(IN) :: its,ite,jts,jte,ims,ime,jms,jme,ids,ide,jds,jde    
+   INTEGER, INTENT(IN) :: nlcat,num_urban_hi,num_urban_ndm,nurbm,ISWATER
+   INTEGER, INTENT(IN) :: LCZ_1,LCZ_11,urban_veg_opt
+   INTEGER :: i,j,k,heights,UTYPE,id,itf,jtf
+   REAL, DIMENSION( ims:ime,1:num_urban_hi , jms:jme), INTENT(INOUT) :: HI_URB2D
+   REAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: BW_URB2D
+   REAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SW_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: HGT_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: FRC_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LP_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LB_URB2D
+   INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: IVGTYP
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LU_INDEX
+   REAL, DIMENSION( ims:ime, nlcat, jms:jme ), INTENT(IN) :: LANDUSEF
+   REAL, DIMENSION(nurbm) :: H_AVE
+   REAL :: INDEX_VEGETATION
+   INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(OUT) :: URBAN_VEGETATION
+   URBAN_VEGETATION=0.
+  
+   DO I = ims, ime
+      DO J = jms, jme
+       SW_URB2D(I,:,J)  = 0.
+       BW_URB2D(I,:,J)  = 0.
+       
+       IF(LP_URB2D(I,J).gt.0..and.FRC_URB2D(I,J).gt.0.2)THEN 
+           DO id = 1, num_urban_ndm
+           BW_URB2D(I,id,J)=2.*HGT_URB2D(I,J)*LP_URB2D(I,J)/(LB_URB2D(I,J)-LP_URB2D(I,J))
+           BW_URB2D(I,id,J)=min(150.,max(1.,BW_URB2D(I,id,J)))
+           SW_URB2D(I,id,J)=2.*HGT_URB2D(I,J)*LP_URB2D(I,J)*((FRC_URB2D(I,J)/LP_URB2D(I,J))-1.)/(LB_URB2D(I,J)-LP_URB2D(I,J))
+           SW_URB2D(I,id,J)=min(150.,max(1.,SW_URB2D(I,id,J)))
+           ENDDO
+       ENDIF
+       
+       ! If urban morphology does not fully cover the urban domain, convert it to vegetation
+       IF (FRC_URB2D(I,J) .LE. 0.2) THEN
+           SW_URB2D(I,:,J)  = 0.
+           BW_URB2D(I,:,J)  = 0.
+           FRC_URB2D(I,J)   = 0.
+           LP_URB2D(I,J)    = 0.
+           LB_URB2D(I,J)    = 0.
+           HI_URB2D(I,:,J)  = 0.
+           HGT_URB2D(I,J)   = 0.
+
+           INDEX_VEGETATION = 0.
+           DO K = 1, LCZ_1 - 1
+               IF (LANDUSEF(I,K,J) .GT. INDEX_VEGETATION) THEN
+                  INDEX_VEGETATION = LANDUSEF(I,K,J)
+                  IVGTYP(I,J) = K
+                  LU_INDEX(I,J) = K
+               ENDIF
+           ENDDO
+         
+   
+       ENDIF
+
+
+       IF(BW_URB2D(I,1,J).eq.0..and.IVGTYP(I,J).ge.LCZ_1)THEN
+            UTYPE = IVGTYP(I, J) - LCZ_1 + 1
+            FRC_URB2D(I, J) = FRC_URB_TBL(UTYPE)
+            DO K = 1, nurbm
+             H_AVE(K) = 0.
+             DO HEIGHTS = 1, NUMHGT_TBL(K)
+               H_AVE(K) = H_AVE(K) + HEIGHT_BIN_TBL(HEIGHTS, K) * HPERCENT_BIN_TBL(HEIGHTS, K) / 100.
+             END DO
+            END DO
+            HGT_URB2D(I, J) = H_AVE(UTYPE)
+            DO heights = 1, num_urban_hi
+               HI_URB2D(I, heights, J) = max(0.,HPERCENT_BIN_TBL(heights,UTYPE))/100.
+            END DO
+            FRC_URB2D(I, J) = FRC_URB_TBL(UTYPE)
+            DO id = 1, num_urban_ndm
+                  BW_URB2D(I, id, J) = BUILDING_WIDTH_TBL(id, UTYPE)
+                  SW_URB2D(I, id, J) = STREET_WIDTH_TBL(id, UTYPE)
+            END DO
+
+      ENDIF
+        
+
+       IF(IVGTYP(I,J).ge.LCZ_1.and.urban_veg_opt.eq.1)THEN 
+          INDEX_VEGETATION=0 
+          do K=1,LCZ_1-1
+            if(LANDUSEF(I,K,J).gt.INDEX_VEGETATION)then
+                INDEX_VEGETATION=LANDUSEF(I,K,J)
+                 URBAN_VEGETATION(I,J)=K
+            endif
+          enddo
+ 
+      ENDIF
+   
+      
+      IF(IVGTYP(I,J).ge.LCZ_1.and.FRC_URB2D(I,J).le.0.)THEN
+      PRINT*,'ANDREA PROBLEM: IVGTYP URBAN AND FRC=0, IVGTYP=',IVGTYP(I,J),'IX',I,'IY',J
+      ENDIF
+      IF(IVGTYP(I,J).ge.LCZ_1.and.BW_URB2D(I,1,J).le.0.)THEN
+      PRINT*,'ANDREA PROBLEM: IVGTYP URBAN AND BW=0, IVGTYP=',IVGTYP(I,J),'IX',I,'IY',J
+      ENDIF
+      IF(IVGTYP(I,J).ge.LCZ_1.and.SW_URB2D(I,1,J).le.0.)THEN
+      PRINT*,'ANDREA PROBLEM: IVGTYP URBAN AND SW=0, IVGTYP=',IVGTYP(I,J),'IX',I,'IY',J
+      ENDIF
+      IF(IVGTYP(I,J).ge.LCZ_1.and.HGT_URB2D(I,J).le.0.)THEN
+      PRINT*,'ANDREA PROBLEM: IVGTYP URBAN AND HGT=0, IVGTYP=',IVGTYP(I,J),'IX',I,'IY',J
+      ENDIF
+         
+      ENDDO
+   ENDDO
+
+   RETURN
+END SUBROUTINE MERGE_LANDUSE_WITH_MORPHOLOGY
+
+
+!===========================================================================
+SUBROUTINE wudapt_majority(its,ite,jts,jte,ims,ime,jms,jme,ids,ide,jds,jde,    &
+                           nlcat,num_urban_hi,nurbm,num_urban_ndm,             &
+                           LCZ_1,LCZ_11,                               &
+                           LP_URB2D,LB_URB2D,                                  &
+                           BW_URB2D,SW_URB2D,HGT_URB2D,HI_URB2D,               &
+                           FRC_URB2D,LANDUSEF,                                 &
+                           IVGTYP,URBAN_VEGETATION,urban_veg_opt,ISWATER)
+   
+   IMPLICIT NONE 
+   INTEGER, INTENT(IN) :: its,ite,jts,jte,ims,ime,jms,jme,ids,ide,jds,jde    
+   INTEGER, INTENT(IN) :: nlcat,LCZ_1,LCZ_11,urban_veg_opt
+   INTEGER, INTENT(IN) :: num_urban_hi,num_urban_ndm,nurbm,ISWATER
+   INTEGER :: itf,jtf,i,j,k,heights,UTYPE,id
+   REAL, DIMENSION( ims:ime,1:num_urban_hi , jms:jme), INTENT(INOUT) :: HI_URB2D
+   REAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: BW_URB2D
+   REAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SW_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: HGT_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: FRC_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LP_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LB_URB2D
+   INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: IVGTYP
+   REAL, DIMENSION( ims:ime, nlcat, jms:jme ), INTENT(IN) :: LANDUSEF
+   REAL, DIMENSION(nurbm) :: H_AVE
+   REAL :: INDEX_VEGETATION
+   INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(OUT) :: URBAN_VEGETATION
+
+    
+   ! Loop through all grid points
+   DO I = ims, ime
+      DO J = jms, jme
+         URBAN_VEGETATION(I, J) = 0
+         LP_URB2D(I,J) = 0.
+         LB_URB2D(I,J) = 0.
+         DO K = 1, nurbm
+            H_AVE(K) = 0.
+            DO HEIGHTS = 1, NUMHGT_TBL(K)
+               H_AVE(K) = H_AVE(K) + HEIGHT_BIN_TBL(HEIGHTS, K) * HPERCENT_BIN_TBL(HEIGHTS, K) / 100.
+            END DO
+         END DO
+
+         IF (IVGTYP(I, J) .GE. LCZ_1) THEN
+            UTYPE = IVGTYP(I, J) - LCZ_1 + 1
+
+            IF (HGT_URB2D(I, J) .EQ. 0.) THEN
+               HGT_URB2D(I, J) = H_AVE(UTYPE)
+               DO heights = 1, num_urban_hi
+                  HI_URB2D(I, heights, J) = max(0.,HPERCENT_BIN_TBL(heights,UTYPE))/100.
+               END DO
+            END IF
+
+               FRC_URB2D(I, J) = FRC_URB_TBL(UTYPE)
+
+               DO id = 1, num_urban_ndm
+                  BW_URB2D(I, id, J) = BUILDING_WIDTH_TBL(id, UTYPE)
+                  SW_URB2D(I, id, J) = STREET_WIDTH_TBL(id, UTYPE)
+               END DO
+            INDEX_VEGETATION=0
+            IF(urban_veg_opt.eq.1)THEN
+            DO K=1,LCZ_1-1
+            IF(LANDUSEF(I,K,J).gt.INDEX_VEGETATION)then
+                INDEX_VEGETATION=LANDUSEF(I,K,J)
+                 URBAN_VEGETATION(I,J)=K
+            ENDIF
+            ENDDO
+            ENDIF
+        LP_URB2D(I,J) = FRC_URB2D(I,J) / (1.0 + (0.5 * (SW_URB2D(I,1,J) + SW_URB2D(I,2,J))) /  &
+                                         (0.5 * (BW_URB2D(I,1,J) + BW_URB2D(I,2,J))))
+
+        LB_URB2D(I,J) = LP_URB2D(I,J) * (1.0 + (2.0 * HGT_URB2D(I,J)) /  &
+                                         (0.5 * (BW_URB2D(I,1,J) + BW_URB2D(I,2,J))))
+        ENDIF 
+     END DO
+   END DO
+
+   RETURN
+END SUBROUTINE wudapt_majority
+
+!===========================================================================
+!===========================================================================
+   
+   SUBROUTINE wudapt_interpolation(its,ite,jts,jte,ims,ime,jms,jme,                 &
+                                   ids,ide,jds,jde,                                 &
+                                   ISWATER,SF_PHYSICS,                              &
+                                   NLCAT,num_urban_hi,nurbm,num_urban_ndm,          &
+                                   LCZ_1,LCZ_11,                            &
+                                   LP_URB2D,LB_URB2D,                               &
                                    BW_URB2D,HI_URB2D,SW_URB2D,HGT_URB2D,            &
                                    FRC_URB2D,LANDUSEF,                              &
-                                   IVGTYP,LU_INDEX,URBAN_VEGETATION,LANDMASK,XLAND)
-
+                                   IVGTYP,LU_INDEX,URBAN_VEGETATION,urban_veg_opt,LANDMASK,XLAND)
    IMPLICIT NONE
 
 
-   INTEGER, INTENT(IN) :: id,its,ite,jts,jte,ids,ide,jds,jde,ims,ime,jms,jme,kms,kme,nlcat,num_urban_hi,nurbm
-   INTEGER :: itf,jtf,i,j,k,dir,UTYPE,heights,ISWATER,SF_PHYSICS
-   INTEGER, INTENT(IN) :: LCZ_1,LCZ_2,LCZ_3,LCZ_4,LCZ_5,LCZ_6,LCZ_7,LCZ_8,LCZ_9,LCZ_10,LCZ_11
+   INTEGER, INTENT(IN) :: its,ite,jts,jte,ims,ime,jms,jme,ids,ide,jds,jde
+   INTEGER, INTENT(IN) ::  nlcat,num_urban_ndm,num_urban_hi,nurbm
+   INTEGER, INTENT(IN)  :: LCZ_1,LCZ_11,urban_veg_opt
+   INTEGER :: itf,jtf,i,j,k,dir,UTYPE,heights,ISWATER,SF_PHYSICS,id
    REAL, DIMENSION( ims:ime,1:num_urban_hi , jms:jme), INTENT(INOUT) :: HI_URB2D
-   REAL, DIMENSION (num_urban_hi,nurbm) :: HI_TBL
-   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: BW_URB2D
-   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: SW_URB2D
+   REAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: BW_URB2D
+   REAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SW_URB2D
    REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: HGT_URB2D
    REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: FRC_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LP_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LB_URB2D
    INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: IVGTYP
    REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LU_INDEX
    REAL, DIMENSION( ims:ime, NLCAT, jms:jme ) , INTENT(IN)::   LANDUSEF
-   REAL, DIMENSION(ims:kme,nurbm,jms:jme) :: LCZ_FRACTION
+   REAL, DIMENSION(ims:ime,nurbm,jms:jme) :: LCZ_FRACTION
    REAL,DIMENSION(nurbm) :: H_AVE
    REAL :: INDEX_URBAN
    REAL :: FRAC_LCZ,TOT_AREA_R
    REAL :: INDEX_VEGETATION,SUM_URBAN
    INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(OUT) :: URBAN_VEGETATION
    REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LANDMASK,XLAND
-   itf=min0(ite,ide-1)
-     jtf=min0(jte,jde-1)
 
   
    do i=ims,ime
    do j=jms,jme
     FRC_URB2D(I,J)=0.
-    BW_URB2D(I,J)=0.
-    SW_URB2D(I,J)=0.
+    BW_URB2D(I,:,J)=0.
+    SW_URB2D(I,:,J)=0.
+    HGT_URB2D(I,J)=0.
+    LP_URB2D(I,J)=0.
+    LB_URB2D(I,J)=0.
      FRAC_LCZ=0.
      TOT_AREA_R=0.
      INDEX_URBAN=0.
-     HGT_URB2D(I,J)=0.
      SUM_URBAN=0.
      INDEX_VEGETATION=0.
      URBAN_VEGETATION(I,J)=0
@@ -2680,40 +2884,38 @@ SUBROUTINE wudapt_interpolation(id,its,ite,jts,jte,ims,ime,jms,jme,kms,kme,     
       
 
       do K=LCZ_1,LCZ_11
+       
        UTYPE=K-LCZ_1+1
        TOT_AREA_R=TOT_AREA_R+BUILDING_WIDTH_TBL(1,UTYPE)*BUILDING_WIDTH_TBL(2,UTYPE)*LANDUSEF(I,K,J)/FRAC_LCZ
        enddo
         
-
+         
         do K=LCZ_1,LCZ_11
         UTYPE=K-LCZ_1+1
         HGT_URB2D(I,J)=HGT_URB2D(I,J)+H_AVE(UTYPE)*LANDUSEF(I,K,J)/FRAC_LCZ*(BUILDING_WIDTH_TBL(2,UTYPE)*BUILDING_WIDTH_TBL(1,UTYPE))/TOT_AREA_R
-       ! LP_URB2D(I,J)=LP_URB2D(I,J)+FRC_URB_TBL(UTYPE)*BUILDING_WIDTH_TBL(1,UTYPE)/(BUILDING_WIDTH_TBL(1,UTYPE)+STREET_WIDTH_TBL(1,UTYPE))*LANDUSEF(I,K,J)/FRAC_LCZ
-        BW_URB2D(I,J)=BW_URB2D(I,J)+BUILDING_WIDTH_TBL(1,UTYPE)*LANDUSEF(I,K,J)/FRAC_LCZ
-       
-        !LB_URB2D(I,J)=LB_URB2D(I,J)+FRC_URB_TBL(UTYPE)*(BUILDING_WIDTH_TBL(1,UTYPE)+2*H_AVE(UTYPE))/(BUILDING_WIDTH_TBL(1,UTYPE)+STREET_WIDTH_TBL(1,UTYPE))*LANDUSEF(I,K,J)/FRAC_LCZ
-        SW_URB2D(I,J)=SW_URB2D(I,J)+STREET_WIDTH_TBL(1,UTYPE)*LANDUSEF(I,K,J)/FRAC_LCZ
-        
+        do id=1,num_urban_ndm
+         BW_URB2D(I,id,J)=BW_URB2D(I,id,J)+BUILDING_WIDTH_TBL(id,UTYPE)*LANDUSEF(I,K,J)/FRAC_LCZ
+         SW_URB2D(I,id,J)=SW_URB2D(I,id,J)+STREET_WIDTH_TBL(id,UTYPE)*LANDUSEF(I,K,J)/FRAC_LCZ
+        enddo
         SUM_URBAN=SUM_URBAN+LANDUSEF(I,K,J)/FRAC_LCZ
         enddo
-     do heights=1,num_urban_hi
-      HI_URB2D(I,heights,J)=0.
-     do K=LCZ_1,LCZ_11
-      UTYPE=K-LCZ_1+1
-      HI_URB2D(I,heights,J)=HI_URB2D(I,heights,J)+max(0.,HPERCENT_BIN_TBL(heights,UTYPE))*LANDUSEF(I,K,J)/FRAC_LCZ
-     enddo
-     enddo
 
+        do heights=1,num_urban_hi
+        HI_URB2D(I,heights,J)=0.
+        DO K=LCZ_1,LCZ_11
+        UTYPE=K-LCZ_1+1
+        HI_URB2D(I,heights,J)=HI_URB2D(I,heights,J)+max(0.,HPERCENT_BIN_TBL(heights,UTYPE)/100.)*LANDUSEF(I,K,J)/FRAC_LCZ
+        ENDDO
+        enddo
+
+     IF(urban_veg_opt.eq.1)THEN
      do K=1,LCZ_1-1
      if(LANDUSEF(I,K,J).gt.INDEX_VEGETATION)then
         INDEX_VEGETATION=LANDUSEF(I,K,J)
         URBAN_VEGETATION(I,J)=K
-        IF(URBAN_VEGETATION(I,J).eq.ISWATER)then
-        URBAN_VEGETATION(I,J)=0
-        ENDIF
      endif
      enddo
-
+     ENDIF
 
      else
      INDEX_VEGETATION=0.
@@ -2722,10 +2924,11 @@ SUBROUTINE wudapt_interpolation(id,its,ite,jts,jte,ims,ime,jms,jme,kms,kme,     
         INDEX_VEGETATION=LANDUSEF(I,K,J)
         IVGTYP(I,J)=K
         LU_INDEX(I,J)=K
-
+        
         FRC_URB2D(I,J)=0.
         HGT_URB2D(I,J)=0.
-        endif
+        HI_URB2D(I,:,J)=0. 
+       endif
      enddo
     endif
     if(FRC_URB2D(I,J).gt.0.9)URBAN_VEGETATION(I,J)=0
@@ -2739,7 +2942,6 @@ SUBROUTINE wudapt_interpolation(id,its,ite,jts,jte,ims,ime,jms,jme,kms,kme,     
         endif
      enddo
     endif
-    if(SF_PHYSICS.EQ.4)THEN
     if(IVGTYP(I,J).eq.ISWATER)then
         LANDMASK(I,J)=-1
         XLAND(I,J)=2
@@ -2747,17 +2949,13 @@ SUBROUTINE wudapt_interpolation(id,its,ite,jts,jte,ims,ime,jms,jme,kms,kme,     
         LANDMASK(I,J)=1
         XLAND(I,J)=1
     endif
-    ELSEIF(SF_PHYSICS.EQ.2)THEN
-    IF(URBAN_VEGETATION(I,J).eq.21)THEN
-    URBAN_VEGETATION(I,J)=17
-    ENDIF
-    IF(IVGTYP(I,J).eq.21)THEN
-    IVGTYP(I,J)=17
-    LU_INDEX(I,J)=17
-    XLAND(I,J)=2
-    LANDMASK(I,J)=-1
-    ENDIF
-    ENDIF
+     IF(FRC_URB2D(I,J).gt.0.)THEN
+     LP_URB2D(I,J) = FRC_URB2D(I,J) / (1.0 + (0.5 * (SW_URB2D(I,1,J) + SW_URB2D(I,2,J))) /  &
+                                         (0.5 * (BW_URB2D(I,1,J) + BW_URB2D(I,2,J))))
+
+     LB_URB2D(I,J) = LP_URB2D(I,J) * (1.0 + (2.0 * HGT_URB2D(I,J)) /  &
+                                         (0.5 * (BW_URB2D(I,1,J) + BW_URB2D(I,2,J))))
+     ENDIF
    enddo
    enddo
 
@@ -3028,7 +3226,8 @@ SUBROUTINE wudapt_interpolation(id,its,ite,jts,jte,ims,ime,jms,jme,kms,kme,     
                      ENDDO
                   ENDIF
                ENDIF
-                IF (FRC_URB2D(I,J)>0.and.FRC_URB2D(I,J)<=1.) THEN
+                IF (FRC_URB2D(I,J)>0)THEN
+                        IF(FRC_URB2D(I,J).gt.1.)FRC_URB2D(I,J)=1.
                   CONTINUE
                 ELSE
                   WRITE(mesg,*) 'WARNING, FRC_URB2D = 0 BUT IVGTYP IS URBAN'
