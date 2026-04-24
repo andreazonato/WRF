@@ -1204,11 +1204,11 @@ do iz= kts,kte
 
 
        if(gr_flag_u.eq.1)then
-       do id=1,nd
+       do id=1,nd_u(iurb)
        do iz=1,nz_um
         draingr_urb3d(ix,iy)=draingr_urb3d(ix,iy)+d_urb(iz)*roof_frac*drain1D(id,iz)*1000
-        qgr_urb3d(ix,iy)=qgr_urb3d(ix,iy)+qr1D(id,iz,ngr_u)/nd/(nz_um)
-        tgr_urb3d(ix,iy)=tgr_urb3d(ix,iy)+trv1D(id,iz,ngr_u)/nd/(nz_um)
+        qgr_urb3d(ix,iy)=qgr_urb3d(ix,iy)+qr1D(id,iz,ngr_u)/nd_u(iurb)/(nz_um)
+        tgr_urb3d(ix,iy)=tgr_urb3d(ix,iy)+trv1D(id,iz,ngr_u)/nd_u(iurb)/(nz_um)
        enddo
        enddo
        endif
@@ -1974,7 +1974,7 @@ do iz= kts,kte
 
 !Compute the potential temperature for the vertical surfaces of the buildings
 
-       do id=1,nd
+       do id=1,ndu
           do iz=1,nzu!nz_um
              do ibui=1,nbui
                 ptw(2*id-1,iz,ibui)=tw(2*id-1,iz,nwr_u,ibui)*(pr_u(iz)/p0)**(-rcp_u)
