@@ -388,7 +388,7 @@ use module_wrf_error
 
       do ix=its,ite
       do iy=jts,jte
-        if (FRC_URB2D(ix,iy).gt.0.) then    ! Calling BEP only for existing urban classes.	
+        if (FRC_URB2D(ix,iy).ge.0.1 .and. UTYPE_URB2D(ix,iy).ge.1 .and. UTYPE_URB2D(ix,iy).le.nurbm) then    ! Calling BEP only for valid urban classes.
            iurb=UTYPE_URB2D(ix,iy)
 
            hi_urb1D=0.

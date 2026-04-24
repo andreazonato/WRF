@@ -2301,9 +2301,6 @@ END SUBROUTINE smag2d_km
        ENDDO
 
 !! difusivity based on TKE
-#ifdef _ACCEL
-!$acc parallel loop collapse(3) private(tmp, mlen_h, mlen_v, deltas, mlen_s, delxy, pth1, pu1, xkmh_t, xkmv_les, pr_inv_h, pr_inv_v_les)
-#endif
        DO j = j_start, j_end
        DO k = kts, ktf
        DO i = i_start, i_end
