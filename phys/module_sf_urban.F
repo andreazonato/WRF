@@ -14,7 +14,7 @@ USE module_model_constants, ONLY :  piconst
 !===============================================================================
 !     Single-Layer Urban Canopy Model for WRF Noah-LSM
 !     Original Version: 2002/11/06 by Hiroyuki Kusaka
-!     Last Update:      2006/08/24 by Fei Chen and Mukul Tewari (NCAR/RAL)  
+!     Last Update:      2006/08/24 by Fei Chen and Mukul Tewari (NCAR/RAL)
 !===============================================================================
 
    CHARACTER(LEN=4)                :: LU_DATA_TYPE
@@ -51,6 +51,11 @@ USE module_model_constants, ONLY :  piconst
    REAL, ALLOCATABLE, DIMENSION(:) :: PERFLO_TBL
    REAL, ALLOCATABLE, DIMENSION(:) :: PV_FRAC_ROOF_TBL !GRZ
    REAL, ALLOCATABLE, DIMENSION(:) :: GR_FRAC_ROOF_TBL !GRZ
+   REAL, ALLOCATABLE, DIMENSION(:) :: GR_FRAC_GROUND_TBL !GRZ
+   REAL, ALLOCATABLE, DIMENSION(:) :: FRC_TREE_TBL !GRZ
+   REAL, ALLOCATABLE, DIMENSION(:) :: ABSV_TREE_TBL !GRZ
+   REAL, ALLOCATABLE, DIMENSION(:) :: LAI_TREE_TBL !GRZ
+   INTEGER, ALLOCATABLE, DIMENSION(:) :: LEV_TREE_TBL !GRZ
    INTEGER :: GR_FLAG_TBL !GRZ
    INTEGER :: GR_TYPE_TBL !GRZ
    REAL, DIMENSION(1:24)           :: IRHO_TBL
@@ -66,6 +71,8 @@ USE module_model_constants, ONLY :  piconst
    REAL, ALLOCATABLE, DIMENSION(:) :: TRLEND_TBL, TBLEND_TBL, TGLEND_TBL
    REAL, ALLOCATABLE, DIMENSION(:) :: AKANDA_URBAN_TBL
 !for BEP
+    INTEGER :: THERM_COMF_TBL
+   REAL, ALLOCATABLE, DIMENSION(:) :: MET_COMF_TBL,CLO_COMF_TBL,WME_COMF_TBL,WEIGHT_COMF_TBL,HEIGHT_COMF_TBL
    ! MAXDIRS :: The maximum number of street directions we're allowed to define
    INTEGER, PARAMETER :: MAXDIRS = 3
    ! MAXHGTS :: The maximum number of building height bins we're allowed to define
@@ -92,15 +99,15 @@ USE module_model_constants, ONLY :  piconst
    LOGICAL                         :: distributed_aerodynamics_option
    REAL                            :: fgr             ! green roof fraction
    REAL                            :: oasis           ! urban oasis parameter
-   REAL, DIMENSION(1:4)            :: DZGR            ! Layer depth of green roof 
+   REAL, DIMENSION(1:4)            :: DZGR            ! Layer depth of green roof
    REAL, DIMENSION(1:4)            :: alhseason       ! seasonal variation of alh
    REAL, DIMENSION(1:48)           :: alhdiuprf       ! alh diurnal profile, tloc2: 1-48
    REAL, DIMENSION(1:3)            :: porimp          ! porosity of pavement over impervious surface
    REAL, DIMENSION(1:3)            :: dengimp         ! maximum water-holding depth of pavement
 
 !===end hydrological processes===
-   
-   INTEGER                         :: allocate_status 
+
+   INTEGER                         :: allocate_status
 
 !   INTEGER                         :: num_roof_layers
 !   INTEGER                         :: num_wall_layers
@@ -138,8 +145,8 @@ USE module_model_constants, ONLY :  piconst
 !
 ! Input Data from WRF [MKS unit]:
 !
-!     UTYPE  [-]     : Urban type. 1=Commercial/Industrial; 2=High-intensity residential; 
-!                    : 3=low-intensity residential 
+!     UTYPE  [-]     : Urban type. 1=Commercial/Industrial; 2=High-intensity residential;
+!                    : 3=low-intensity residential
 !     TA     [K]     : Potential temperature at 1st wrf level (absolute temp)
 !     QA     [kg/kg] : Mixing ratio at 1st atmospheric level
 !     UA     [m/s]   : Wind speed at 1st atmospheric level
@@ -149,15 +156,15 @@ USE module_model_constants, ONLY :  piconst
 !                      single solar downward can be used instead.
 !                      SSG = SSGD + SSGQ
 !     LSOLAR [-]     : Indicating the input type of solar downward radiation
-!                      True: both direct and diffusive solar radiation 
+!                      True: both direct and diffusive solar radiation
 !                      are available
 !                      False: only total downward ridiation is available.
 !     SSGD   [W/m/m] : Direct solar radiation at a flat surface
 !                      if SSGD is not available, one can assume a ratio SRATIO
-!                      (e.g., 0.7), so that SSGD = SRATIO*SSG 
+!                      (e.g., 0.7), so that SSGD = SRATIO*SSG
 !     SSGQ   [W/m/m] : Diffuse solar radiation at a flat surface
 !                      If SSGQ is not available, SSGQ = SSG - SSGD
-!     LLG    [W/m/m] : Long wave downward radiation at a flat surface 
+!     LLG    [W/m/m] : Long wave downward radiation at a flat surface
 !     RAIN   [mm/h]  : Precipitation
 !     RHOO   [kg/m/m/m] : Air density
 !     ZA     [m]     : First atmospheric level
@@ -177,10 +184,10 @@ USE module_model_constants, ONLY :  piconst
 !     SH  [W/m/m/]       : Sensible heat flux, = FLXTH*RHOO*CPP
 !     LH  [W/m/m]        : Latent heat flux, = FLXHUM*RHOO*ELL
 !     LH_INEMATIC [kg/m/m/sec]: Moisture Kinematic flux, = FLXHUM*RHOO
-!     SW  [W/m/m]        : Upward shortwave radiation flux, 
+!     SW  [W/m/m]        : Upward shortwave radiation flux,
 !                          = SSG-SNET*697.7*60. (697.7*60.=100.*100.*4.186)
 !     ALB [-]            : Time-varying albedo
-!     LW  [W/m/m]        : Upward longwave radiation flux, 
+!     LW  [W/m/m]        : Upward longwave radiation flux,
 !                          = LNET*697.7*60.-LLG
 !     G   [W/m/m]        : Heat Flux into the Ground
 !     RN  [W/m/m]        : Net radiation
@@ -290,7 +297,7 @@ USE module_model_constants, ONLY :  piconst
 !
 ! History:
 !     2014/10,         modified by Jiachuan Yang (ASU)
-!     2006/06          modified by H. Kusaka (Univ. Tsukuba), M. Tewari 
+!     2006/06          modified by H. Kusaka (Univ. Tsukuba), M. Tewari
 !     2005/10/26,      modified by Fei Chen, Mukul Tewari
 !     2003/07/21 WRF , modified  by H. Kusaka of CRIEPI (NCAR/MMM)
 !     2001/08/26 PhD , modified  by H. Kusaka of CRIEPI (Univ.Tsukuba)
@@ -315,7 +322,7 @@ USE module_model_constants, ONLY :  piconst
                     SW,ALB,LW,G,RN,PSIM,PSIH,                         & ! O
                     GZ1OZ0,                                           & ! O
                     CMR_URB,CHR_URB,CMC_URB,CHC_URB,                  & ! I/O
-                    U10,V10,TH2,Q2,UST,mh_urb,stdh_urb,lf_urb,        & ! O 
+                    U10,V10,TH2,Q2,UST,mh_urb,stdh_urb,lf_urb,        & ! O
                     lp_urb,hgt_urb,frc_urb,lb_urb,zo_check,           & ! O
                     CMCR,TGR,TGRL,SMR,CMGR_URB,CHGR_URB,jmonth,       & ! H
                     DRELR,DRELB,DRELG,FLXHUMR,FLXHUMB,FLXHUMG,        &
@@ -343,8 +350,8 @@ USE module_model_constants, ONLY :  piconst
 
    LOGICAL, INTENT(IN) :: LSOLAR  ! logical    [true=both, false=SSG only]
 
-!  The following variables are also model configuration variables, but are 
-!  defined in the URBAN.TBL and in the contains statement in the top of 
+!  The following variables are also model configuration variables, but are
+!  defined in the URBAN.TBL and in the contains statement in the top of
 !  the module_urban_init, so we should not declare them here.
 
   INTEGER, INTENT(IN) :: num_roof_layers
@@ -360,9 +367,9 @@ USE module_model_constants, ONLY :  piconst
 ! I: input variables from LSM to Urban
 !-------------------------------------------------------------------------------
 
-   INTEGER, INTENT(IN) :: UTYPE ! urban type [1=Commercial/Industrial, 2=High-intensity residential, 
+   INTEGER, INTENT(IN) :: UTYPE ! urban type [1=Commercial/Industrial, 2=High-intensity residential,
                                 ! 3=low-intensity residential]
-   INTEGER, INTENT(IN) :: jmonth! current month 
+   INTEGER, INTENT(IN) :: jmonth! current month
    REAL, INTENT(IN)    :: TA   ! potential temp at 1st atmospheric level [K]
    REAL, INTENT(IN)    :: QA   ! mixing ratio at 1st atmospheric level  [kg/kg]
    REAL, INTENT(IN)    :: UA   ! wind speed at 1st atmospheric level    [m/s]
@@ -393,7 +400,7 @@ USE module_model_constants, ONLY :  piconst
 !-------------------------------------------------------------------------------
    REAL, INTENT(INOUT) :: mh_urb   ! mean building height [m]
    REAL, INTENT(INOUT) :: stdh_urb ! standard deviation of building height [m]
-   REAL, INTENT(INOUT) :: hgt_urb  ! area weighted mean building height [m] 
+   REAL, INTENT(INOUT) :: hgt_urb  ! area weighted mean building height [m]
    REAL, INTENT(INOUT) :: lp_urb   ! plan area fraction [-]
    REAL, INTENT(INOUT) :: frc_urb  ! urban fraction [-]
    REAL, INTENT(INOUT) :: lb_urb   ! building surface to plan area ratio [-]
@@ -408,7 +415,7 @@ USE module_model_constants, ONLY :  piconst
    REAL, INTENT(IN) :: vegfrac_in  ! vegetation fraction (0 to 1) [-]
 
 !-------------------------------------------------------------------------------
-! O: output variables from Urban to LSM 
+! O: output variables from Urban to LSM
 !-------------------------------------------------------------------------------
 
    REAL, INTENT(OUT) :: TS     ! surface potential temperature    [K]
@@ -423,7 +430,7 @@ USE module_model_constants, ONLY :  piconst
    REAL, INTENT(OUT) :: RN     ! net radition                     [W/m/m]
    REAL, INTENT(OUT) :: PSIM   ! similality stability shear function for momentum
    REAL, INTENT(OUT) :: PSIH   ! similality stability shear function for heat
-   REAL, INTENT(OUT) :: GZ1OZ0   
+   REAL, INTENT(OUT) :: GZ1OZ0
    REAL, INTENT(OUT) :: U10    ! u at 10m                         [m/s]
    REAL, INTENT(OUT) :: V10    ! u at 10m                         [m/s]
    REAL, INTENT(OUT) :: TH2    ! potential temperature at 2 m     [K]
@@ -462,18 +469,18 @@ USE module_model_constants, ONLY :  piconst
 ! FLXHUMB: evaporation over wall  [m/s];     FLXHUMBP: at previous time step [m/s]
 ! FLXHUMG: evaporation over road  [m/s];     FLXHUMGP: at previous time step [m/s]
 
-! DRELR: water retention depth on roof [m];  DRELRP: at previous time stp [m] 
-! DRELB: water retention depth on wall [m];  DRELBP: at previous time stp [m] 
+! DRELR: water retention depth on roof [m];  DRELRP: at previous time stp [m]
+! DRELB: water retention depth on wall [m];  DRELBP: at previous time stp [m]
 ! DRELG: water retention depth on road [m];  DRELGP: at previous time stp [m]
-  
+
 ! TGR: green roof surface temperature  [K];      TGRP: at previous time step [K]
 ! CMCR: Canopy intercepted water on green roof;  CMCRP: at previous time step
 ! SMR: soil moisture at each layer on roof [-];  SMRP: at previous time step
 ! TGRL:layer temperature on green roof [K]
-  
+
    REAL, INTENT(INOUT):: FLXHUMR,FLXHUMB,FLXHUMG,DRELR,DRELB,DRELG
    REAL, INTENT(INOUT):: TGR,CMCR,CHGR_URB,CMGR_URB
-   REAL, DIMENSION(1:num_roof_layers), INTENT(INOUT) :: SMR        
+   REAL, DIMENSION(1:num_roof_layers), INTENT(INOUT) :: SMR
    REAL, DIMENSION(1:num_roof_layers), INTENT(INOUT) :: TGRL
 
 !-------------------------------------------------------------------------------
@@ -482,15 +489,15 @@ USE module_model_constants, ONLY :  piconst
 
    REAL :: ZR, Z0C, Z0HC, ZDC, SVF, R, RW, HGT, AH, ALH
    REAL :: SIGMA_ZED
-   REAL :: CAPR, CAPB, CAPG, AKSR, AKSB, AKSG, ALBR, ALBB, ALBG 
+   REAL :: CAPR, CAPB, CAPG, AKSR, AKSB, AKSG, ALBR, ALBB, ALBG
    REAL :: EPSR, EPSB, EPSG, Z0R,  Z0B,  Z0G,  Z0HB, Z0HG
    REAL :: TRLEND,TBLEND,TGLEND
    REAL :: T1VR, T1VC,TH2V
    REAL :: RLMO_URB
    REAL :: AKANDA_URBAN
-   
+
    REAL :: TH2X                                                !m
-   
+
    INTEGER :: BOUNDR, BOUNDB, BOUNDG
    INTEGER :: CH_SCHEME, TS_SCHEME
 
@@ -547,7 +554,7 @@ USE module_model_constants, ONLY :  piconst
    REAL :: FAI        ! Latitude [rad]
    REAL :: CNT,SNT
    REAL :: PS         ! Surface Pressure [hPa]
-   REAL :: TAV        ! Vertial Temperature [K] 
+   REAL :: TAV        ! Vertial Temperature [K]
 
    REAL :: XXX, X, Z0, Z0H, CD, CH
    REAL :: XXX2, PSIM2, PSIH2, XXX10, PSIM10, PSIH10
@@ -561,7 +568,7 @@ USE module_model_constants, ONLY :  piconst
    REAL :: lambda_f,alpha_macd,beta_macd,lambda_fr
    REAL :: lambda_p, vegfrac
 
-   INTEGER :: iteration, K, NUDAPT 
+   INTEGER :: iteration, K, NUDAPT
    INTEGER :: tloc, tloc2, Kalh
 
 !===Yang,2014/10/08, urban hydrological variables for single layer UCM===
@@ -572,40 +579,40 @@ USE module_model_constants, ONLY :  piconst
 !===Define parameters for green roof===
    INTEGER :: KZ
    REAL :: RUNOFF1, RUNOFF2, RUNOFF3
-   REAL :: SGR, SGR1, T1VGR, CHGR, ALPHAGR 
+   REAL :: SGR, SGR1, T1VGR, CHGR, ALPHAGR
    REAL :: FLXTHGR, FLXHUMGR, HGR, ELEGR, G0GR
    REAL :: QS0GR, EPGR, EDIR, ETTR, FV, DTGR, DRIP
 !   REAL :: DQS0GRDTGR, ETR, ECR,RAIN1, RAINDR, DEW, ETAR, BETGR
    REAL :: DQS0GRDTGR, ECR,RAIN1, RAINDR, DEW, ETAR, BETGR
 !   REAL :: DF1, RGR, RGRR, RCH, RR1, RR2, YY, ZZ1, SSOILR
    REAL :: DF1, RGR, RGRR, RCH, YY, ZZ1, SSOILR
-   REAL :: DRRDTGR, DHRDTGR, DELERDTGR, DG0RDTGR, DFDVT  
+   REAL :: DRRDTGR, DHRDTGR, DELERDTGR, DG0RDTGR, DFDVT
    real,parameter  :: SHDFAC   = 0.80   ! Vegetated area fraction of green roof vegetation
    real,parameter  :: ALBV     = 0.20   ! green roof albedo
    real,parameter  :: EPSV     = 0.93   ! green roof emissivity
    real,parameter  :: LAI      = 1.50   ! leaf area index on green roof
-   real,parameter  :: CMCMAX   = 0.5E-3 ! Maximum canopy interception capacity   
+   real,parameter  :: CMCMAX   = 0.5E-3 ! Maximum canopy interception capacity
    real,parameter  :: SMCREF   = 0.329  ! Reference soil moisture
    real,parameter  :: SMCDRY   = 0.066  ! Residual  soil moisture
-   real,parameter  :: SMCWLT   = 0.084  ! Wilting point        
+   real,parameter  :: SMCWLT   = 0.084  ! Wilting point
    real,parameter  :: SMCMAX   = 0.439  ! Saturated soil moisture
    real,parameter  :: RSMAX    = 5000   ! Maximum stomatal resistance
    real,parameter  :: RSMIN    = 100    ! Minimum stomatal resistance
    real,parameter  :: RGL      = 100    ! Radiation limit where photosynthesis begins
-   real,parameter  :: CFACTR   = 0.5    ! Parameter used in the canopy inteception calculation        
-   real,parameter  :: DWSAT    = 0.143E-4 ! Saturated soil conductivity            
+   real,parameter  :: CFACTR   = 0.5    ! Parameter used in the canopy inteception calculation
+   real,parameter  :: DWSAT    = 0.143E-4 ! Saturated soil conductivity
    real,parameter  :: DKSAT    = 3.38E-6  ! Saturated soil diffusivity
    real,parameter  :: BEXP     = 5.25   ! B parameter in soil hydraulic calculation
-   real,parameter  :: FXEXP    = 2.0    ! Parameter for computing direct soil evaporation        
-   real,parameter  :: ZBOT     = -2.0   
+   real,parameter  :: FXEXP    = 2.0    ! Parameter for computing direct soil evaporation
+   real,parameter  :: ZBOT     = -2.0
    real,parameter  :: QUARTZ   = 0.40
    real,parameter  :: CSOIL    = 2.0E+6
    real,parameter  :: HS       = 36
    integer,parameter ::  NROOT = 2      ! Root depth layer of green roof
    integer,parameter ::  NGR   = 4      ! Layer of green roof
-   integer,parameter ::  IMPR  = 1     
-   integer,parameter ::  IMPB  = 2      
-   integer,parameter ::  IMPG  = 3    
+   integer,parameter ::  IMPR  = 1
+   integer,parameter ::  IMPB  = 2
+   integer,parameter ::  IMPG  = 3
 
    SHADOW = .false.
 !   SHADOW = .true.
@@ -637,9 +644,9 @@ USE module_model_constants, ONLY :  piconst
                    ALBG,EPSR,EPSB,EPSG,Z0R,Z0B,Z0G,Z0HB,Z0HG,     &
                    BETR,BETB,BETG,TRLEND,TBLEND,TGLEND,           &
 !for BEP
-                   NUMDIR, STREET_DIRECTION, STREET_WIDTH,        & 
-                   BUILDING_WIDTH, NUMHGT, HEIGHT_BIN,            & 
-                   HPERCENT_BIN,                                  & 
+                   NUMDIR, STREET_DIRECTION, STREET_WIDTH,        &
+                   BUILDING_WIDTH, NUMHGT, HEIGHT_BIN,            &
+                   HPERCENT_BIN,                                  &
 !end BEP
                    BOUNDR,BOUNDB,BOUNDG,CH_SCHEME,TS_SCHEME,      &
                    AKANDA_URBAN,ALH)
@@ -681,7 +688,7 @@ USE module_model_constants, ONLY :  piconst
   !WRITE_MESSAGE(mesg)
   !write(mesg,*) 'Building Surf Ratio',lb_urb
   !WRITE_MESSAGE(mesg)
- 
+
  !Calculate Building Width and Street Width Based on BEP formulation
  if(lb_urb.gt.lp_urb)THEN
   BW=2.*hgt_urb*lp_urb/(lb_urb-lp_urb)
@@ -697,7 +704,7 @@ USE module_model_constants, ONLY :  piconst
     BW=BUILDING_WIDTH(1)
   SW=STREET_WIDTH(1)
  end if
- 
+
  !Assign NUDAPT Parameters
    ZR = mh_urb
     R = lp_urb
@@ -707,7 +714,7 @@ USE module_model_constants, ONLY :  piconst
 
  !Calculate Wind Direction and Assign Appropriae lf_urb
    WDR = (180.0/PI)*ATAN2(U10,V10)
-   
+
    IF(WDR.ge.0.0.and.WDR.lt.22.5)THEN
      lambda_f = lf_urb(1)
    ELSEIF(WDR.ge.-22.5.and.WDR.lt.0.0)THEN
@@ -742,7 +749,7 @@ USE module_model_constants, ONLY :  piconst
 
       Z0C = ZR * ( 1.0 - ZDC/ZR ) * &
            exp (-(0.5 * beta_macd * Cd / (VonK**2) * ( 1.0-ZDC/ZR) * lambda_f )**(-0.5))
-     
+
       if(zo_check.eq.1)THEN
         write(mesg,*) 'Roughness Length NUDAPT',Z0C
         WRITE_MESSAGE(mesg)
@@ -754,7 +761,7 @@ USE module_model_constants, ONLY :  piconst
              * exp ( -(0.5 * beta_macd * Cd / (VonK**2) &
               * ( 1.0-ZDC/ZR) * lambda_fr )**(-0.5))
 
-    
+
 
        Z0HC = 0.1 * Z0C
 
@@ -823,7 +830,12 @@ USE module_model_constants, ONLY :  piconst
    END IF
 
    IF( ZDC+Z0C+2. >= ZA) THEN
-    FATAL_ERROR("ZDC + Z0C + 2m is larger than the 1st WRF level - Stop in subroutine urban - change ZDC and Z0C" ) 
+    WRITE(*,*) 'DEBUG URBAN:'
+    WRITE(*,*) 'ZDC = ', ZDC
+    WRITE(*,*) 'Z0C = ', Z0C
+    WRITE(*,*) 'ZA  = ', ZA
+    WRITE(*,*) 'ZDC+Z0C+2 = ', ZDC+Z0C+2.
+    FATAL_ERROR("ZDC + Z0C + 2m is larger than the 1st WRF level - Stop in subroutine urban - change ZDC and Z0C" )
    END IF
 
    IF(.NOT.LSOLAR) THEN
@@ -868,7 +880,7 @@ USE module_model_constants, ONLY :  piconst
    DRELGP = DRELG
    TGRP   = TGR
    CMCRP  = CMCR
-   SMRP   = SMR 
+   SMRP   = SMR
 
 !===Yang,2014/10/08, urban irrigation, May-Sep, 9-10pm
    IF(IRI_SCHEME==1) THEN
@@ -897,7 +909,7 @@ USE module_model_constants, ONLY :  piconst
      BB = 0.4 * ZR / ( XLB * alog( ( ZR - ZDC ) / Z0C ) )
      UC=UR*EXP(-BB*(1.-ZC/ZR))
    ELSE
-     ! PRINT *, 'Warning ZR + 2m  is larger than the 1st WRF level' 
+     ! PRINT *, 'Warning ZR + 2m  is larger than the 1st WRF level'
      ZC=ZA/2.
      UC=UA/2.
    END IF
@@ -1001,9 +1013,9 @@ USE module_model_constants, ONLY :  piconst
 
    ! Alternative option for MOST using SFCDIF routine from Noah
    ! Virtual temperatures needed by SFCDIF
-   T1VR = TRP* (1.0+ 0.61 * QA) 
+   T1VR = TRP* (1.0+ 0.61 * QA)
    TH2V = (TA + ( 0.0098 * ZA)) * (1.0+ 0.61 * QA)
-  
+
    ! note that CHR_URB contains UA (=CHR_MOS*UA)
    RLMO_URB=0.0
    IF (distributed_aerodynamics_option) THEN
@@ -1023,19 +1035,19 @@ USE module_model_constants, ONLY :  piconst
    CHR=ALPHAR/RHO/CP/UA
    END IF
 
-! Yang, 03/12/2014 -- LH for impervious roof surface  
+! Yang, 03/12/2014 -- LH for impervious roof surface
    RAIN1 = RAIN * 0.001 /3600          ! CONVERT FROM mm/hr to m/s
    IF (IMP_SCHEME==1) then
    IF (RAIN > 1.) BETR=0.7
-   ENDIF   
+   ENDIF
 
    IF (IMP_SCHEME==2) then
-   IF (FLXHUMRP <= 0.) FLXHUMRP = 0. 
-!  Compute water retention depth from previous time step 
+   IF (FLXHUMRP <= 0.) FLXHUMRP = 0.
+!  Compute water retention depth from previous time step
    ! Convert kinematic water flux to evaporation in m/s: multiply flux by rho_air/who_water in SI units
    DrelR = DrelRP+(RAIN1-FLXHUMRP*RHOO/1000.)*DELT/porimp(IMPR)
-   IF (RAIN > 0. .AND. DrelR < DrelRP) DrelR = DrelRP 
-  
+   IF (RAIN > 0. .AND. DrelR < DrelRP) DrelR = DrelRP
+
    IF (DrelR <= 0.) then
    DrelR  = 0.0
    BETR	  = 0.0
@@ -1043,27 +1055,27 @@ USE module_model_constants, ONLY :  piconst
    BETR = DrelR/dengimp(IMPR)*porimp(IMPR)
    ELSE
    DrelR = dengimp(IMPR)
-   BETR  = porimp(IMPR)   
+   BETR  = porimp(IMPR)
    ENDIF
 
    IF ( BETR < 1.E-5 ) BETR = 0.0
    ENDIF
 
-   IF (TS_SCHEME == 1) THEN 
+   IF (TS_SCHEME == 1) THEN
 
 !-------------------------------------------------------------------------------
 ! TR  Solving Non-Linear Equation by Newton-Rapson
-! TRL Solving Heat Equation by Tri Diagonal Matrix Algorithm  
+! TRL Solving Heat Equation by Tri Diagonal Matrix Algorithm
 !-------------------------------------------------------------------------------
-!      TSC=TRP-273.15                          
+!      TSC=TRP-273.15
 !      ES=EXP(19.482-4303.4/(TSC+243.5))        ! WMO
 !      ES=6.11*10.**(TETENA*TSC/(TETENB+TSC))   ! Tetens
 !      DESDT=( 6.1078*(2500.-2.4*TSC)/ &        ! Tetens
-!            (0.46151*(TSC+273.15)**2.) )*10.**(7.5*TSC/(237.3+TSC)) 
-!      ES=6.11*EXP((2.5*10.**6./461.51)*(TRP-273.15)/(273.15*TRP) ) ! Clausius-Clapeyron 
+!            (0.46151*(TSC+273.15)**2.) )*10.**(7.5*TSC/(237.3+TSC))
+!      ES=6.11*EXP((2.5*10.**6./461.51)*(TRP-273.15)/(273.15*TRP) ) ! Clausius-Clapeyron
 !      DESDT=(2.5*10.**6./461.51)*ES/(TRP**2.)                      ! Clausius-Clapeyron
-!      QS0R=0.622*ES/(PS-0.378*ES) 
-!      DQS0RDTR = DESDT*0.622*PS/((PS-0.378*ES)**2.) 
+!      QS0R=0.622*ES/(PS-0.378*ES)
+!      DQS0RDTR = DESDT*0.622*PS/((PS-0.378*ES)**2.)
 !      DQS0RDTR = 17.269*(273.15-35.86)/((TRP-35.86)**2.)*QS0R
 
 !    TRP=350.
@@ -1072,8 +1084,8 @@ USE module_model_constants, ONLY :  piconst
 
        ES=6.11*EXP( (2.5*10.**6./461.51)*(TRP-273.15)/(273.15*TRP) )
        DESDT=(2.5*10.**6./461.51)*ES/(TRP**2.)
-       QS0R=0.622*ES/(PS-0.378*ES) 
-       DQS0RDTR = DESDT*0.622*PS/((PS-0.378*ES)**2.) 
+       QS0R=0.622*ES/(PS-0.378*ES)
+       DQS0RDTR = DESDT*0.622*PS/((PS-0.378*ES)**2.)
 
        RR=EPSR*(RX-SIG*(TRP**4.)/60.)
        HR=RHO*CP*CHR*UA*(TRP-TA)*100.
@@ -1087,7 +1099,7 @@ USE module_model_constants, ONLY :  piconst
        DELERDTR = RHO*EL*CHR*UA*BETR*DQS0RDTR*100.
        DG0RDTR =  2.*AKSR/DZR(1)
 
-       DFDT = DRRDTR - DHRDTR - DELERDTR - DG0RDTR 
+       DFDT = DRRDTR - DHRDTR - DELERDTR - DG0RDTR
        DTR = F/DFDT
 
        TR = TRP - DTR
@@ -1104,7 +1116,7 @@ USE module_model_constants, ONLY :  piconst
    ELSE
 
      ES=6.11*EXP( (2.5*10.**6./461.51)*(TRP-273.15)/(273.15*TRP) )
-     QS0R=0.622*ES/(PS-0.378*ES)        
+     QS0R=0.622*ES/(PS-0.378*ES)
 
      RR=EPSR*(RX-SIG*(TRP**4.)/60.)
      HR=RHO*CP*CHR*UA*(TRP-TA)*100.
@@ -1123,9 +1135,9 @@ USE module_model_constants, ONLY :  piconst
 !-------------------------------------------------------------------------------
 ! Green Roof
 ! Must use multiple layers scheme (TS_SCHEME=1)
-!-------------------------------------------------------------------------------     
+!-------------------------------------------------------------------------------
    IF (GROPTION == 1) THEN
-   T1VGR = TGRP* (1.0+ 0.61 * QA) 
+   T1VGR = TGRP* (1.0+ 0.61 * QA)
    RLMO_URB=0.0
    CALL SFCDIF_URB (ZA,Z0R,T1VGR,TH2V,UA,AKANDA_URBAN,CMGR_URB,CHGR_URB,RLMO_URB,CDGR)
    ALPHAGR =  RHO*CP*CHGR_URB
@@ -1135,37 +1147,37 @@ USE module_model_constants, ONLY :  piconst
    RUNOFF3 = 0.0
 
    KZ = 1
-   ZSOILR (KZ) = - DZGR (KZ) 
+   ZSOILR (KZ) = - DZGR (KZ)
    DO KZ = 2,NGR
       ZSOILR (KZ) = - DZGR(KZ) + ZSOILR (KZ -1)
    END DO
 
    DO ITERATION=1,100
-       KZ=1     
+       KZ=1
        ES=6.11*EXP( (2.5*10.**6./461.51)*(TGRP-273.15)/(273.15*TGRP) )
        DESDT=(2.5*10.**6./461.51)*ES/(TGRP**2.)
-       QS0GR=0.622*ES/(PS-0.378*ES) 
-       DQS0GRDTGR = DESDT*0.622*PS/((PS-0.378*ES)**2.) 
+       QS0GR=0.622*ES/(PS-0.378*ES)
+       DQS0GRDTGR = DESDT*0.622*PS/((PS-0.378*ES)**2.)
        EPGR=RHOO*CHGR*UA*(QS0GR-QA)   ! Potential evaporation [kg/m2/s]
 
        IF (EPGR > 0.0) THEN
-       ! Direct evaporation from soil on green roof 
-       CALL DIREVAP (EDIR,EPGR,SMRP(KZ),SHDFAC,SMCMAX,SMCDRY,FXEXP)    
+       ! Direct evaporation from soil on green roof
+       CALL DIREVAP (EDIR,EPGR,SMRP(KZ),SHDFAC,SMCMAX,SMCDRY,FXEXP)
        ! Evapotranspiration and canopy intercepted evaporation
        CALL TRANSP  (ETTR,ETR,ECR,SHDFAC,EPGR,CMCRP,CFACTR,CMCMAX,LAI,RSMIN,RSMAX,RGL,SX, &
                      TGRP,TA,QA,SMRP,SMCWLT,SMCREF,CPP,PS,CHGR,EPSV,DELT,NROOT,NGR,DZGR, &
                      ZSOILR,HS)
        ! Update moisture in soil layers
        CALL SMFLX   (SMRP,SMR,NGR,CMCRP,CMCR,DELT,RAIN,ZSOILR,SMCMAX,BEXP,SMCWLT,DKSAT,&
-                     DWSAT,SHDFAC,CMCMAX,RUNOFF1,RUNOFF2,RUNOFF3,EDIR,ECR,ETR,DRIP)  
-       else 
+                     DWSAT,SHDFAC,CMCMAX,RUNOFF1,RUNOFF2,RUNOFF3,EDIR,ECR,ETR,DRIP)
+       else
        DEW  = - EPGR
        RAINDR = RAIN  + DEW * 3600.
        EDIR=0.0
        ECR =0.0
        ETTR=0.0
        CALL SMFLX (SMRP,SMR,NGR,CMCRP,CMCR,DELT,RAINDR,ZSOILR,SMCMAX,BEXP,SMCWLT,DKSAT,&
-                   DWSAT,SHDFAC,CMCMAX,RUNOFF1,RUNOFF2,RUNOFF3,EDIR,ECR,ETR,DRIP)  
+                   DWSAT,SHDFAC,CMCMAX,RUNOFF1,RUNOFF2,RUNOFF3,EDIR,ECR,ETR,DRIP)
        END IF
 ! ----------------------------------------------------------------------
 ! CONVERT MODELED EVAPOTRANSPIRATION FROM  M S-1  TO  KG M-2 S-1.
@@ -1179,12 +1191,12 @@ USE module_model_constants, ONLY :  piconst
        IF ( EPGR <= 0.0 ) THEN
          BETGR = 0.0
        ELSE
-         BETGR = ETAR / EPGR 
-       END IF   
+         BETGR = ETAR / EPGR
+       END IF
        ELEGR= ETAR* RHO * EL /RHOO * 100
-          
+
        CALL TDFCND (DF1,SMR(KZ), QUARTZ, SMCMAX )
-       DF1 = DF1 * EXP(-2.0 * SHDFAC)  
+       DF1 = DF1 * EXP(-2.0 * SHDFAC)
        RGR = EPSV*(RX-SIG*(TA**4.)/60.)
        RGRR= (SGR+RGR) * 697.7 * 60.
        RCH = RHOO*CPP*CHGR
@@ -1193,14 +1205,14 @@ USE module_model_constants, ONLY :  piconst
        RR2 = RR1 + RAIN / 3600 * 4.218E+3 / RCH
        else
        RR2 = RR1
-       end if 
-       YY  = TA + (RGRR / RCH - BETGR * EPGR * ELL/ RCH) / RR2  
+       end if
+       YY  = TA + (RGRR / RCH - BETGR * EPGR * ELL/ RCH) / RR2
        ZZ1 = DF1 / (-0.5 * ZSOILR (KZ) * RCH * RR2 ) + 1.0
 
 
-       HGR=RHO*CP*CHGR*UA*(TGRP-TA)*100.     
+       HGR=RHO*CP*CHGR*UA*(TGRP-TA)*100.
        RUNOFF3 = RUNOFF3/ DELT
-       RUNOFF2 = RUNOFF2+ RUNOFF3      
+       RUNOFF2 = RUNOFF2+ RUNOFF3
        G0GR    = DF1*(TGRP-TGRL(1))/(DZGR(1)/2.)/697.7/60
 
        FV = SGR + RGR - HGR - ELEGR - G0GR
@@ -1208,7 +1220,7 @@ USE module_model_constants, ONLY :  piconst
        DHRDTGR   = RHO*CP*CHGR*UA*100.
        DELERDTGR = RHO*EL*CHGR*UA*BETGR*DQS0GRDTGR*100.
        DG0RDTGR  = 2.*DF1/ DZGR(KZ) * ( 1.0 / 4.1868 ) * 1.E-4
-       DFDVT = DRRDTGR - DHRDTGR - DELERDTGR - DG0RDTGR 
+       DFDVT = DRRDTGR - DHRDTGR - DELERDTGR - DG0RDTGR
        DTGR = FV/DFDVT/ 6
        TGR  = TGRP - DTGR
        TGRP = TGR
@@ -1228,7 +1240,7 @@ ELSE
 ENDIF
 
 !-------------------------------------------------------------------------------
-!  Wall and Road 
+!  Wall and Road
 !-------------------------------------------------------------------------------
 
 !-------------------------------------------------------------------------------
@@ -1244,12 +1256,12 @@ ENDIF
 
    IF (.not. distributed_aerodynamics_option) THEN
 
-   T1VC = TCP* (1.0+ 0.61 * QA) 
+   T1VC = TCP* (1.0+ 0.61 * QA)
    RLMO_URB=0.0
    CALL SFCDIF_URB(ZA,Z0C,T1VC,TH2V,UA,AKANDA_URBAN,CMC_URB,CHC_URB,RLMO_URB,CDC)
    ALPHAC =  RHO*CP*CHC_URB
 
-   IF (CH_SCHEME == 1) THEN 
+   IF (CH_SCHEME == 1) THEN
 
      Z=ZDC
      BHB=LOG(Z0B/Z0HB)/0.4
@@ -1282,45 +1294,45 @@ ENDIF
  ENDIF
 
  IF (IMP_SCHEME==2) then
-   IF (FLXHUMBP <= 0.) FLXHUMBP = 0. 
-   IF (FLXHUMGP <= 0.) FLXHUMGP = 0. 
+   IF (FLXHUMBP <= 0.) FLXHUMBP = 0.
+   IF (FLXHUMGP <= 0.) FLXHUMGP = 0.
 ! Compute water retention from previous time step for wall and ground
    ! Convert kinematic water flux to evaporation in m/s: multiply flux by rho_air/who_water in SI units
-  DrelB = DrelBP+(RAIN1-FLXHUMBP*RHOO/1000.)*DELT/porimp(IMPB) 
-    IF (RAIN > 0. .AND. DrelB < DrelBP) DrelB = DrelBP 
-  DrelG = DrelGP+(RAIN1-FLXHUMGP*RHOO/1000.)*DELT/porimp(IMPG)  
-    IF (RAIN > 0. .AND. DrelG < DrelGP) DrelG = DrelGP 
-  
+  DrelB = DrelBP+(RAIN1-FLXHUMBP*RHOO/1000.)*DELT/porimp(IMPB)
+    IF (RAIN > 0. .AND. DrelB < DrelBP) DrelB = DrelBP
+  DrelG = DrelGP+(RAIN1-FLXHUMGP*RHOO/1000.)*DELT/porimp(IMPG)
+    IF (RAIN > 0. .AND. DrelG < DrelGP) DrelG = DrelGP
+
   IF (DrelB <= 0.) then
   DrelB   = 0.0
   BETB    = 0.0
   ELSEIf (DrelB <= dengimp(IMPB)) then
-  BETB  = DrelB/dengimp(IMPB)*porimp(IMPB) 
+  BETB  = DrelB/dengimp(IMPB)*porimp(IMPB)
   ELSE
   DrelB = dengimp(IMPB)
-  BETB = porimp(IMPB) 
+  BETB = porimp(IMPB)
   ENDIF
 
   IF (DrelG <= 0.) then
   DrelG   = 0.0
   BETG    = 0.0
   ELSEIf (DrelG <= dengimp(IMPG)) then
-  BETG  = DrelG/dengimp(IMPG)*porimp(IMPG) 
+  BETG  = DrelG/dengimp(IMPG)*porimp(IMPG)
   ELSE
   DrelG = dengimp(IMPG)
-  BETG  = porimp(IMPG) 
+  BETG  = porimp(IMPG)
   ENDIF
 
   if ( BETG < 1.E-5 ) BETG = 0.0
   if ( BETB < 1.E-5 ) BETB = 0.0
- 
+
 ENDIF
 
    IF (TS_SCHEME == 1) THEN
 
 !-------------------------------------------------------------------------------
 !  TB, TG  Solving Non-Linear Simultaneous Equation by Newton-Rapson
-!  TBL,TGL Solving Heat Equation by Tri Diagonal Matrix Algorithm  
+!  TBL,TGL Solving Heat Equation by Tri Diagonal Matrix Algorithm
 !-------------------------------------------------------------------------------
 
 !    TBP=350.
@@ -1328,15 +1340,15 @@ ENDIF
 
      DO ITERATION=1,20
 
-       ES=6.11*EXP( (2.5*10.**6./461.51)*(TBP-273.15)/(273.15*TBP) ) 
+       ES=6.11*EXP( (2.5*10.**6./461.51)*(TBP-273.15)/(273.15*TBP) )
        DESDT=(2.5*10.**6./461.51)*ES/(TBP**2.)
-       QS0B=0.622*ES/(PS-0.378*ES) 
+       QS0B=0.622*ES/(PS-0.378*ES)
        DQS0BDTB=DESDT*0.622*PS/((PS-0.378*ES)**2.)
 
-       ES=6.11*EXP( (2.5*10.**6./461.51)*(TGP-273.15)/(273.15*TGP) ) 
+       ES=6.11*EXP( (2.5*10.**6./461.51)*(TGP-273.15)/(273.15*TGP) )
        DESDT=(2.5*10.**6./461.51)*ES/(TGP**2.)
-       QS0G=0.622*ES/(PS-0.378*ES)        
-       DQS0GDTG=DESDT*0.622*PS/((PS-0.378*ES)**2.) 
+       QS0G=0.622*ES/(PS-0.378*ES)
+       DQS0GDTG=DESDT*0.622*PS/((PS-0.378*ES)**2.)
 
        RG1=EPSG*( RX*VFGS          &
        +EPSB*VFGW*SIG*TBP**4./60.  &
@@ -1425,12 +1437,12 @@ ENDIF
        DG0GDTB=0.
 
        F = SB + RB - HB - ELEB - G0B
-       FX = DRBDTB - DHBDTB - DELEBDTB - DG0BDTB 
+       FX = DRBDTB - DHBDTB - DELEBDTB - DG0BDTB
        FY = DRBDTG - DHBDTG - DELEBDTG - DG0BDTG
 
        GF = SG + RG - HG - ELEG - G0G
        GX = DRGDTB - DHGDTB - DELEGDTB - DG0GDTB
-       GY = DRGDTG - DHGDTG - DELEGDTG - DG0GDTG 
+       GY = DRGDTG - DHGDTG - DELEGDTG - DG0GDTG
 
        DTB =  (GF*FY-F*GY)/(FX*GY-GX*FY)
        DTG = -(GF+GX*DTB)/GY
@@ -1470,14 +1482,14 @@ ENDIF
    ELSE
 
 !-------------------------------------------------------------------------------
-!  TB, TG  by Force-Restore Method 
+!  TB, TG  by Force-Restore Method
 !-------------------------------------------------------------------------------
 
        ES=6.11*EXP((2.5*10.**6./461.51)*(TBP-273.15)/(273.15*TBP) )
-       QS0B=0.622*ES/(PS-0.378*ES)       
+       QS0B=0.622*ES/(PS-0.378*ES)
 
        ES=6.11*EXP((2.5*10.**6./461.51)*(TGP-273.15)/(273.15*TGP) )
-       QS0G=0.622*ES/(PS-0.378*ES)        
+       QS0G=0.622*ES/(PS-0.378*ES)
 
        RG1=EPSG*( RX*VFGS             &
        +EPSB*VFGW*SIG*TBP**4./60.     &
@@ -1551,7 +1563,7 @@ ENDIF
    endif
    FLXUV  = ((1.-FGR)*R*CDR + FGR*R*CDGR + RW*CDC )*UA*UA
    FLXG =   ((1.-FGR)*R*G0R + FGR*R*G0GR+ W*G0B + RW*G0G)
-   LNET =   (1.-FGR) * R * RR + FGR *R* RGR + W * RB +  RW * RG 
+   LNET =   (1.-FGR) * R * RR + FGR *R* RGR + W * RB +  RW * RG
  else
    if(ahoption==1) then
      FLXTH  = ( R*FLXTHR  + W*FLXTHB  + RW*FLXTHG ) + AH/RHOO/CPP
@@ -1582,7 +1594,7 @@ ENDIF
    LW    = LLG - (LNET*697.7*60.) ! Upward longwave radiation   [W/m/m]
    SW    = SSG - (SNET*697.7*60.) ! Upward shortwave radiation  [W/m/m]
    ALB   = 0.
-   IF( ABS(SSG) > 0.0001) ALB = SW/SSG ! Effective albedo [-] 
+   IF( ABS(SSG) > 0.0001) ALB = SW/SSG ! Effective albedo [-]
    G = -FLXG*697.7*60.            ! [W/m/m]
    RN = (SNET+LNET)*697.7*60.     ! Net radiation [W/m/m]
 
@@ -1594,7 +1606,7 @@ ENDIF
 !  diagnostic GRID AVERAGED  PSIM  PSIH  TS QS --> WRF
 !------------------------------------------------------
 
-   Z0 = Z0C 
+   Z0 = Z0C
    Z0H = Z0HC
    Z = ZA - ZDC
    ZNT = Z0   ! add by Dan Li
@@ -1683,7 +1695,7 @@ ENDIF
      TH2 = TS + (TA - TS) * (CHS_LOCAL / CHS2_LOCAL)
      Q2 = QS + (QA - QS) * (CHS_LOCAL / CHS2_LOCAL)
    ELSE
-   TH2 = TS + (TA-TS) *(CHS/CHS2) 
+   TH2 = TS + (TA-TS) *(CHS/CHS2)
    Q2 = QS + (QA-QS)*(PSIT2/PSIT)    ! humidity at 2 m       [-]
    END IF
 
@@ -1713,7 +1725,7 @@ ENDIF
    INTEGER             :: NEWT
    INTEGER, PARAMETER  :: NEWT_END=10
 
-   IF(RIB <= -15.) RIB=-15. 
+   IF(RIB <= -15.) RIB=-15.
 
    IF(RIB < 0.) THEN
 
@@ -1777,7 +1789,7 @@ ENDIF
    CD=US*US/UA**2.            ! CD
    ALPHA=RHO*CP*0.4*US/PSIH   ! RHO*CP*CH*U
 
-   RETURN 
+   RETURN
    END SUBROUTINE mos
 !===============================================================================
 !
@@ -1799,14 +1811,14 @@ ENDIF
    IF(RIB <= -15.) RIB=-15.
 
    IF(RIB >= 0.0) THEN
-      IF(RIB >= 0.142857) THEN 
+      IF(RIB >= 0.142857) THEN
          XX=0.714
-      ELSE 
+      ELSE
          XX=RIB*LOG(Z/Z0)/(1.-7.*RIB)
-      END IF 
+      END IF
       CH=0.16/0.74/(LOG(Z/Z0)+7.*MIN(XX,0.714))**2.
       CD=0.16/(LOG(Z/Z0)+7.*MIN(XX,0.714))**2.
-   ELSE 
+   ELSE
       CMB=7.4*A2*9.4*SQRT(Z/Z0)
       CHB=5.3*A2*9.4*SQRT(Z/Z0)
       CH=A2/0.74*(1.-9.4*RIB/(1.+CHB*SQRT(-RIB)))
@@ -1815,7 +1827,7 @@ ENDIF
 
    ALPHA=RHO*CP*CH*UA
 
-   RETURN 
+   RETURN
    END SUBROUTINE louis79
 !===============================================================================
 !
@@ -1829,19 +1841,19 @@ ENDIF
    REAL, PARAMETER     :: CP=0.24
    REAL, INTENT(IN)    :: Z, Z0, UA, RHO
    REAL, INTENT(OUT)   :: ALPHA, CD
-   REAL, INTENT(INOUT) :: RIB 
-   REAL                :: A2, FM, FH, CH, CHH 
+   REAL, INTENT(INOUT) :: RIB
+   REAL                :: A2, FM, FH, CH, CHH
 
    A2=(0.4/ALOG(Z/Z0))**2.
 
    IF(RIB <= -15.) RIB=-15.
 
-   IF(RIB >= 0.0) THEN 
+   IF(RIB >= 0.0) THEN
       FM=1./((1.+(2.*5.*RIB)/SQRT(1.+5.*RIB)))
       FH=1./(1.+(3.*5.*RIB)*SQRT(1.+5.*RIB))
       CH=A2*FH
       CD=A2*FM
-   ELSE 
+   ELSE
       CHH=5.*3.*5.*A2*SQRT(Z/Z0)
       FM=1.-(2.*5.*RIB)/(1.+3.*5.*5.*A2*SQRT(Z/Z0+1.)*(-RIB))
       FH=1.-(3.*5.*RIB)/(1.+CHH*SQRT(-RIB))
@@ -1897,22 +1909,22 @@ ENDIF
 
    DO K=2,KM-1
       A(K) = -2.*AKS/(DZ(K-1)+DZ(K))
-      B(K) = CAP*DZ(K)/DELT + 2.*AKS/(DZ(K-1)+DZ(K)) + 2.*AKS/(DZ(K)+DZ(K+1)) 
+      B(K) = CAP*DZ(K)/DELT + 2.*AKS/(DZ(K-1)+DZ(K)) + 2.*AKS/(DZ(K)+DZ(K+1))
       C(K) = -2.*AKS/(DZ(K)+DZ(K+1))
       D(K) = CAP*DZ(K)/DELT*TSL(K)
-   END DO 
+   END DO
 
    IF(BOUND == 1) THEN                  ! Flux=0
       A(KM) = -2.*AKS/(DZ(KM-1)+DZ(KM))
-      B(KM) = CAP*DZ(KM)/DELT + 2.*AKS/(DZ(KM-1)+DZ(KM))  
+      B(KM) = CAP*DZ(KM)/DELT + 2.*AKS/(DZ(KM-1)+DZ(KM))
       C(KM) = 0.0
       D(KM) = CAP*DZ(KM)/DELT*TSL(KM)
    ELSE                                 ! T=constant
       A(KM) = -2.*AKS/(DZ(KM-1)+DZ(KM))
-      B(KM) = CAP*DZ(KM)/DELT + 2.*AKS/(DZ(KM-1)+DZ(KM)) + 2.*AKS/(DZ(KM)+DZEND) 
+      B(KM) = CAP*DZ(KM)/DELT + 2.*AKS/(DZ(KM-1)+DZ(KM)) + 2.*AKS/(DZ(KM)+DZEND)
       C(KM) = 0.0
       D(KM) = CAP*DZ(KM)/DELT*TSL(KM) + 2.*AKS*TSLEND/(DZ(KM)+DZEND)
-   END IF 
+   END IF
 
    P(1) = -C(1)/B(1)
    Q(1) =  D(1)/B(1)
@@ -1920,19 +1932,19 @@ ENDIF
    DO K=2,KM
       P(K) = -C(K)/(A(K)*P(K-1)+B(K))
       Q(K) = (-A(K)*Q(K-1)+D(K))/(A(K)*P(K-1)+B(K))
-   END DO 
+   END DO
 
    X(KM) = Q(KM)
 
    DO K=KM-1,1,-1
       X(K) = P(K)*X(K+1)+Q(K)
-   END DO 
+   END DO
 
    DO K=1,KM
       TSL(K) = X(K)
-   END DO 
+   END DO
 
-   RETURN 
+   RETURN
    END SUBROUTINE multi_layer
 !===============================================================================
 !
@@ -1952,7 +1964,7 @@ ENDIF
                          BOUNDR,BOUNDB,BOUNDG,CH_SCHEME,TS_SCHEME,     & ! out
                          AKANDA_URBAN,ALH)         ! out
 
-   INTEGER, INTENT(IN)  :: UTYPE 
+   INTEGER, INTENT(IN)  :: UTYPE
 
    REAL, INTENT(OUT)    :: ZR,Z0C,Z0HC,ZDC,SVF,R,RW,HGT,AH,ALH,          &
                            CAPR,CAPB,CAPG,AKSR,AKSB,AKSG,ALBR,ALBB,ALBG, &
@@ -1968,7 +1980,7 @@ ENDIF
    INTEGER,                     INTENT(OUT) :: NUMHGT
    REAL,    DIMENSION(MAXHGTS), INTENT(OUT) :: HEIGHT_BIN
    REAL,    DIMENSION(MAXHGTS), INTENT(OUT) :: HPERCENT_BIN
-   
+
 !end BEP
 
    INTEGER, INTENT(OUT) :: BOUNDR,BOUNDB,BOUNDG,CH_SCHEME,TS_SCHEME
@@ -2063,7 +2075,7 @@ ENDIF
    INTEGER :: num_roof_layers
    INTEGER :: num_wall_layers
    INTEGER :: num_road_layers
-   INTEGER :: dummy 
+   INTEGER :: dummy
    REAL    :: DHGT, HGT, VFWS, VFGS
 
    REAL, allocatable, dimension(:) :: ROOF_WIDTH
@@ -2092,11 +2104,11 @@ ENDIF
    num_road_layers = num_soil_layers
 
 
-   ICATE=0  
+   ICATE=0
 
    distributed_aerodynamics_option = slucm_distributed_drag
 
-   
+
   if(USE_WUDAPT_LCZ.eq.0)then   !AndreaLCZ
    OPEN (UNIT=11,                &
          FILE='URBPARM.TBL', &
@@ -2123,9 +2135,9 @@ ENDIF
          FATAL_ERROR('Error opening URBPARM_LCZ.TBL. Make sure URBPARM_LCZ.TBL (found in run/) is linked to the running directory.')
          ENDIF
  endif
- 
 
-   READLOOP : do 
+
+   READLOOP : do
       read(11,'(A512)', iostat=iostatus) string
       if (iostatus /= 0) exit READLOOP
       if (string(1:1) == "#") cycle READLOOP
@@ -2133,7 +2145,7 @@ ENDIF
       indx = index(string,":")
       if (indx <= 0) cycle READLOOP
       name = trim(adjustl(string(1:indx-1)))
-      
+
       ! Here are the variables we expect to be defined in the URBPARM.TBL:
       if (name == "Number of urban categories") then
          read(string(indx+1:),*) icate
@@ -2144,11 +2156,11 @@ ENDIF
             if(allocate_status /= 0) FATAL_ERROR('Error allocating SIGMA_ZED_TBL in urban_param_init')
             ALLOCATE( Z0C_TBL(ICATE), stat=allocate_status )
             if(allocate_status /= 0) FATAL_ERROR('Error allocating Z0C_TBL in urban_param_init')
-            ALLOCATE( Z0HC_TBL(ICATE), stat=allocate_status ) 
+            ALLOCATE( Z0HC_TBL(ICATE), stat=allocate_status )
             if(allocate_status /= 0) FATAL_ERROR('Error allocating Z0HC_TBL in urban_param_init')
             ALLOCATE( ZDC_TBL(ICATE), stat=allocate_status )
             if(allocate_status /= 0) FATAL_ERROR('Error allocating ZDC_TBL in urban_param_init')
-            ALLOCATE( SVF_TBL(ICATE), stat=allocate_status ) 
+            ALLOCATE( SVF_TBL(ICATE), stat=allocate_status )
             if(allocate_status /= 0) FATAL_ERROR('Error allocating SVF_TBL in urban_param_init')
             ALLOCATE( R_TBL(ICATE), stat=allocate_status )
             if(allocate_status /= 0) FATAL_ERROR('Error allocating R_TBL in urban_param_init')
@@ -2261,7 +2273,26 @@ ENDIF
             if(allocate_status /= 0) FATAL_ERROR('Error allocating PV_FRAC_ROOF_TBL in urban_param_init')
             ALLOCATE( GR_FRAC_ROOF_TBL(ICATE), stat=allocate_status )
             if(allocate_status /= 0) FATAL_ERROR('Error allocating GR_FRAC_ROOF_TBL in urban_param_init')
-
+            ALLOCATE( GR_FRAC_GROUND_TBL(ICATE), stat=allocate_status )
+            if(allocate_status /= 0) CALL wrf_error_fatal('Error allocating GR_FRAC_GROUND_TBL in urban_param_init')
+            ALLOCATE( FRC_TREE_TBL(ICATE), stat=allocate_status )
+            if(allocate_status /= 0) CALL wrf_error_fatal('Error allocating FRC_TREE_TBL in urban_param_init')
+            ALLOCATE( ABSV_TREE_TBL(ICATE), stat=allocate_status )
+            if(allocate_status /= 0) CALL wrf_error_fatal('Error allocating ABSV_TREE_TBL in urban_param_init')
+            ALLOCATE( LAI_TREE_TBL(ICATE), stat=allocate_status )
+            if(allocate_status /= 0) CALL wrf_error_fatal('Error allocating LAI_TREE_TBL in urban_param_init')
+            ALLOCATE( LEV_TREE_TBL(ICATE), stat=allocate_status )
+            if(allocate_status /= 0) CALL wrf_error_fatal('Error allocating LEV_TREE_TBL in urban_param_init')
+            ALLOCATE( MET_COMF_TBL(ICATE), stat=allocate_status )
+            if(allocate_status /= 0) CALL wrf_error_fatal('Error allocating MET_COMF_TBL in urban_param_init')
+            ALLOCATE( CLO_COMF_TBL(ICATE), stat=allocate_status )
+            if(allocate_status /= 0) CALL wrf_error_fatal('Error allocating CLO_COMF_TBL in urban_param_init')
+            ALLOCATE( WME_COMF_TBL(ICATE), stat=allocate_status )
+            if(allocate_status /= 0) CALL wrf_error_fatal('Error allocating WME_COMF_TBL in urban_param_init')
+            ALLOCATE( WEIGHT_COMF_TBL(ICATE), stat=allocate_status )
+            if(allocate_status /= 0) CALL wrf_error_fatal('Error allocating WEIGTH_COMF_TBL in urban_param_init')
+            ALLOCATE( HEIGHT_COMF_TBL(ICATE), stat=allocate_status )
+            if(allocate_status /= 0) CALL wrf_error_fatal('Error allocating HEIGTH_COMF_TBL in urban_param_init')
          endif
          numdir_tbl = 0
          street_direction_tbl = -1.E36
@@ -2414,13 +2445,13 @@ ENDIF
             numhgt_tbl(k) = numhgt_tbl(k) + 1
             height_bin_tbl(numhgt_tbl(k), k) = dummy_hgt
             hpercent_bin_tbl(numhgt_tbl(k),k) = dummy_pct
-            
+
          enddo HEIGHTLOOP
          pctsum = sum ( hpercent_bin_tbl(:,k) , mask=(hpercent_bin_tbl(:,k)>-1.E25 ) )
          if ( pctsum /= 100.) then
             write (*,'(//,"Building height percentages for category ", I2, " must sum to 100.0")') k
             write (*,'("Currently, they sum to ", F6.2,/)') pctsum
-            FATAL_ERROR('pctsum is not equal to 100.') 
+            FATAL_ERROR('pctsum is not equal to 100.')
          endif
       else if ( name == "Z0R") then
          read(string(indx+1:),*) Z0R_tbl(1:icate)
@@ -2460,12 +2491,36 @@ ENDIF
          read(string(indx+1:),*) pv_frac_roof_tbl(1:icate)
      else if ( name == "GR_FRAC_ROOF") then
          read(string(indx+1:),*) gr_frac_roof_tbl(1:icate)
+     else if ( name == "GR_FRAC_GROUND") then
+         read(string(indx+1:),*) gr_frac_ground_tbl(1:icate)
       else if (name == "GR_FLAG") then
          read(string(indx+1:),*) gr_flag_tbl
       else if (name == "GR_TYPE") then
          read(string(indx+1:),*) gr_type_tbl
+      else if (name == "FRC_TREE") then
+         read(string(indx+1:),*) frc_tree_tbl(1:icate)
+      else if (name == "ABSV_TREE") then
+         read(string(indx+1:),*) absv_tree_tbl(1:icate)
+      else if (name == "LAI_TREE") then
+         read(string(indx+1:),*) lai_tree_tbl(1:icate)
+      else if (name == "LEV_TREE") then
+         read(string(indx+1:),*) lev_tree_tbl(1:icate)
+       else if (name == "THERM_COMF") then
+         read(string(indx+1:),*) therm_comf_tbl
+         write(*,*)'therm_comf_tbl=',therm_comf_tbl
+      else if (name == "MET_COMF") then
+         read(string(indx+1:),*) met_comf_tbl(1:icate)
+         write(*,*)'met_comf_tbl=',met_comf_tbl
+      else if (name == "CLO_COMF") then
+         read(string(indx+1:),*) clo_comf_tbl(1:icate)
+      else if (name == "WME_COMF") then
+         read(string(indx+1:),*) WME_comf_tbl(1:icate)
+      else if (name == "WEIGHT_COMF") then
+         read(string(indx+1:),*) weight_comf_tbl(1:icate)
+      else if (name == "HEIGHT_COMF") then
+         read(string(indx+1:),*) height_comf_tbl(1:icate)
 
-!end BEP         
+!end BEP
       else
          FATAL_ERROR('URBPARM.TBL: Unrecognized NAME = "'//trim(name)//'" in Subr URBAN_PARAM_INIT')
       endif
@@ -2492,7 +2547,7 @@ ENDIF
       BETG_TBL(LC) = 0.0
 
       ! The following urban canyon geometry parameters are following Macdonald's (1998) formulations
-      
+
       ! Lambda_P :: Plan areal fraction, which corresponds to R for a 2-d canyon.
       ! Lambda_F :: Frontal area index, which corresponds to HGT for a 2-d canyon
       ! Cd       :: Drag coefficient ( 1.2 from Grimmond and Oke, 1998 )
@@ -2502,7 +2557,7 @@ ENDIF
       Lambda_P = R_TBL(LC)
       Lambda_F = HGT_TBL(LC)
       Cd         = 1.2
-      alpha_macd = 4.43 
+      alpha_macd = 4.43
       beta_macd  = 1.0
 
 
@@ -2550,6 +2605,421 @@ ENDIF
 
    END SUBROUTINE urban_param_init
 !===========================================================================
+
+SUBROUTINE merge_landuse_with_morphology(its,ite,jts,jte,ims,ime,jms,jme,ids,ide,jds,jde, &
+                                         nurbm, num_urban_hi, num_urban_ndm,NLCAT,      &
+                                         LCZ_1,LCZ_11,                          &
+                                         LANDUSEF, FRC_URB2D, SW_URB2D, BW_URB2D,       &
+                                         LP_URB2D, LB_URB2D, HI_URB2D, HGT_URB2D,       &
+                                         IVGTYP, LU_INDEX, URBAN_VEGETATION,urban_veg_opt, ISWATER, &
+                                         XLAND,LANDMASK)
+   IMPLICIT NONE
+
+   ! Variable declarations
+   INTEGER, INTENT(IN) :: its,ite,jts,jte,ims,ime,jms,jme,ids,ide,jds,jde
+   INTEGER, INTENT(IN) :: nlcat,num_urban_hi,num_urban_ndm,nurbm,ISWATER
+   INTEGER, INTENT(IN) :: LCZ_1,LCZ_11,urban_veg_opt
+   INTEGER :: i,j,k,heights,UTYPE,id,itf,jtf
+   REAL, DIMENSION( ims:ime,1:num_urban_hi , jms:jme), INTENT(INOUT) :: HI_URB2D
+   REAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: BW_URB2D
+   REAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SW_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: HGT_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: FRC_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LP_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LB_URB2D
+   INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: IVGTYP
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LU_INDEX
+   REAL, DIMENSION( ims:ime, nlcat, jms:jme ), INTENT(IN) :: LANDUSEF
+   REAL, DIMENSION(nurbm) :: H_AVE
+   REAL :: INDEX_VEGETATION
+   INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(OUT) :: URBAN_VEGETATION
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: XLAND,LANDMASK
+   URBAN_VEGETATION=0.
+
+   DO I = ims, ime
+      DO J = jms, jme
+       SW_URB2D(I,:,J)  = 0.
+       BW_URB2D(I,:,J)  = 0.
+
+       IF(LP_URB2D(I,J).gt.0..and.FRC_URB2D(I,J).gt.0.1)THEN
+           DO id = 1, num_urban_ndm
+           BW_URB2D(I,id,J)=2.*HGT_URB2D(I,J)*LP_URB2D(I,J)/(LB_URB2D(I,J)-LP_URB2D(I,J))
+           BW_URB2D(I,id,J)=min(150.,max(1.,BW_URB2D(I,id,J)))
+           SW_URB2D(I,id,J)=2.*HGT_URB2D(I,J)*LP_URB2D(I,J)*((FRC_URB2D(I,J)/LP_URB2D(I,J))-1.)/(LB_URB2D(I,J)-LP_URB2D(I,J))
+           SW_URB2D(I,id,J)=min(150.,max(1.,SW_URB2D(I,id,J)))
+           ENDDO
+       ENDIF
+       INDEX_VEGETATION=0
+       IF(FRC_URB2D(I,J).GE.0.1 .AND. IVGTYP(I,J).LT.LCZ_1)THEN
+
+        do K=1,LCZ_1-1
+            if(LANDUSEF(I,K,J).gt.INDEX_VEGETATION)then
+                INDEX_VEGETATION=LANDUSEF(I,K,J)
+                LU_INDEX(I,J)=K
+                IVGTYP(I,J)=K
+           endif
+        enddo
+       ENDIF
+
+       ! If urban morphology does not fully cover the urban domain, convert it to vegetation
+       IF (FRC_URB2D(I,J) .LT. 0.1) THEN
+           SW_URB2D(I,:,J)  = 0.
+           BW_URB2D(I,:,J)  = 0.
+           FRC_URB2D(I,J)   = 0.
+           LP_URB2D(I,J)    = 0.
+           LB_URB2D(I,J)    = 0.
+           HI_URB2D(I,:,J)  = 0.
+           HGT_URB2D(I,J)   = 0.
+
+           INDEX_VEGETATION = 0.
+           DO K = 1, LCZ_1 - 1
+               IF (LANDUSEF(I,K,J) .GT. INDEX_VEGETATION) THEN
+                  INDEX_VEGETATION = LANDUSEF(I,K,J)
+                  IVGTYP(I,J) = K
+                  LU_INDEX(I,J) = K
+               ENDIF
+           ENDDO
+
+
+
+       ENDIF
+
+
+       IF(BW_URB2D(I,1,J).eq.0..and.IVGTYP(I,J).ge.LCZ_1)THEN
+            UTYPE = IVGTYP(I, J) - LCZ_1 + 1
+            FRC_URB2D(I, J) = FRC_URB_TBL(UTYPE)
+            DO K = 1, nurbm
+             H_AVE(K) = 0.
+             DO HEIGHTS = 1, NUMHGT_TBL(K)
+               H_AVE(K) = H_AVE(K) + HEIGHT_BIN_TBL(HEIGHTS, K) * HPERCENT_BIN_TBL(HEIGHTS, K) / 100.
+             END DO
+            END DO
+            HGT_URB2D(I, J) = H_AVE(UTYPE)
+            DO heights = 1, num_urban_hi
+               HI_URB2D(I, heights, J) = max(0.,HPERCENT_BIN_TBL(heights,UTYPE))/100.
+            END DO
+            FRC_URB2D(I, J) = FRC_URB_TBL(UTYPE)
+            DO id = 1, num_urban_ndm
+                  BW_URB2D(I, id, J) = BUILDING_WIDTH_TBL(id, UTYPE)
+                  SW_URB2D(I, id, J) = STREET_WIDTH_TBL(id, UTYPE)
+            END DO
+             LP_URB2D(I,J) = FRC_URB2D(I,J) / (1.0 + (0.5 * (SW_URB2D(I,1,J) + SW_URB2D(I,2,J))) /  &
+                                         (0.5 * (BW_URB2D(I,1,J) + BW_URB2D(I,2,J))))
+
+             LB_URB2D(I,J) = LP_URB2D(I,J) * (1.0 + (2.0 * HGT_URB2D(I,J)) /  &
+                                         (0.5 * (BW_URB2D(I,1,J) + BW_URB2D(I,2,J))))
+
+      ENDIF
+
+
+       IF(IVGTYP(I,J).ge.LCZ_1.and.urban_veg_opt.eq.1)THEN
+          INDEX_VEGETATION=0
+          do K=1,LCZ_1-1
+            if(LANDUSEF(I,K,J).gt.INDEX_VEGETATION)then
+                INDEX_VEGETATION=LANDUSEF(I,K,J)
+                URBAN_VEGETATION(I,J)=K
+            endif
+          enddo
+      ENDIF
+      if(IVGTYP(I,J).eq.ISWATER)then
+        LANDMASK(I,J)=-1
+        XLAND(I,J)=2
+      else
+        LANDMASK(I,J)=1
+        XLAND(I,J)=1
+      endif
+      ENDDO
+   ENDDO
+
+
+   RETURN
+END SUBROUTINE MERGE_LANDUSE_WITH_MORPHOLOGY
+
+
+!===========================================================================
+SUBROUTINE wudapt_majority(its,ite,jts,jte,ims,ime,jms,jme,ids,ide,jds,jde,    &
+                           nlcat,num_urban_hi,nurbm,num_urban_ndm,             &
+                           LCZ_1,LCZ_11,                               &
+                           LP_URB2D,LB_URB2D,                                  &
+                           BW_URB2D,SW_URB2D,HGT_URB2D,HI_URB2D,               &
+                           FRC_URB2D,LANDUSEF,                                 &
+                           IVGTYP,URBAN_VEGETATION,urban_veg_opt,ISWATER,XLAND,LANDMASK)
+
+   IMPLICIT NONE
+   INTEGER, INTENT(IN) :: its,ite,jts,jte,ims,ime,jms,jme,ids,ide,jds,jde
+   INTEGER, INTENT(IN) :: nlcat,LCZ_1,LCZ_11,urban_veg_opt
+   INTEGER, INTENT(IN) :: num_urban_hi,num_urban_ndm,nurbm,ISWATER
+   INTEGER :: itf,jtf,i,j,k,heights,UTYPE,id
+   REAL, DIMENSION( ims:ime,1:num_urban_hi , jms:jme), INTENT(INOUT) :: HI_URB2D
+   REAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: BW_URB2D
+   REAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SW_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: HGT_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: FRC_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LP_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LB_URB2D
+   INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: IVGTYP
+   REAL, DIMENSION( ims:ime, nlcat, jms:jme ), INTENT(IN) :: LANDUSEF
+   REAL, DIMENSION(nurbm) :: H_AVE
+   REAL :: INDEX_VEGETATION
+   INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(OUT) :: URBAN_VEGETATION
+    REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: XLAND,LANDMASK
+
+   ! Loop through all grid points
+   DO I = ims, ime
+      DO J = jms, jme
+         URBAN_VEGETATION(I, J) = 0
+         LP_URB2D(I,J) = 0.
+         LB_URB2D(I,J) = 0.
+         DO K = 1, nurbm
+            H_AVE(K) = 0.
+            DO HEIGHTS = 1, NUMHGT_TBL(K)
+               H_AVE(K) = H_AVE(K) + HEIGHT_BIN_TBL(HEIGHTS, K) * HPERCENT_BIN_TBL(HEIGHTS, K) / 100.
+            END DO
+         END DO
+
+         IF (IVGTYP(I, J) .GE. LCZ_1) THEN
+            UTYPE = IVGTYP(I, J) - LCZ_1 + 1
+
+            IF (HGT_URB2D(I, J) .EQ. 0.) THEN
+               HGT_URB2D(I, J) = H_AVE(UTYPE)
+               DO heights = 1, num_urban_hi
+                  HI_URB2D(I, heights, J) = max(0.,HPERCENT_BIN_TBL(heights,UTYPE))/100.
+               END DO
+            END IF
+
+               FRC_URB2D(I, J) = FRC_URB_TBL(UTYPE)
+
+               DO id = 1, num_urban_ndm
+                  BW_URB2D(I, id, J) = BUILDING_WIDTH_TBL(id, UTYPE)
+                  SW_URB2D(I, id, J) = STREET_WIDTH_TBL(id, UTYPE)
+               END DO
+            INDEX_VEGETATION=0
+            IF(urban_veg_opt.eq.1)THEN
+            DO K=1,LCZ_1-1
+            IF(LANDUSEF(I,K,J).gt.INDEX_VEGETATION)then
+                INDEX_VEGETATION=LANDUSEF(I,K,J)
+                URBAN_VEGETATION(I,J)=K
+
+            ENDIF
+            ENDDO
+           ENDIF
+        LP_URB2D(I,J) = FRC_URB2D(I,J) / (1.0 + (0.5 * (SW_URB2D(I,1,J) + SW_URB2D(I,2,J))) /  &
+                                         (0.5 * (BW_URB2D(I,1,J) + BW_URB2D(I,2,J))))
+
+        LB_URB2D(I,J) = LP_URB2D(I,J) * (1.0 + (2.0 * HGT_URB2D(I,J)) /  &
+                                         (0.5 * (BW_URB2D(I,1,J) + BW_URB2D(I,2,J))))
+        ENDIF
+
+     if(IVGTYP(I,J).eq.ISWATER)then
+        LANDMASK(I,J)=-1
+        XLAND(I,J)=2
+    else
+        LANDMASK(I,J)=1
+        XLAND(I,J)=1
+    endif
+     END DO
+   END DO
+
+   RETURN
+END SUBROUTINE wudapt_majority
+
+!===========================================================================
+!===========================================================================
+
+   SUBROUTINE wudapt_interpolation(its,ite,jts,jte,ims,ime,jms,jme,                 &
+                                   ids,ide,jds,jde,                                 &
+                                   ISWATER,SF_PHYSICS,                              &
+                                   NLCAT,num_urban_hi,nurbm,num_urban_ndm,          &
+                                   LCZ_1,LCZ_11,                            &
+                                   LP_URB2D,LB_URB2D,                               &
+                                   BW_URB2D,HI_URB2D,SW_URB2D,HGT_URB2D,            &
+                                   FRC_URB2D,LANDUSEF,                              &
+                                   IVGTYP,LU_INDEX,URBAN_VEGETATION,urban_veg_opt,XLAND,LANDMASK)
+   IMPLICIT NONE
+
+
+   INTEGER, INTENT(IN) :: its,ite,jts,jte,ims,ime,jms,jme,ids,ide,jds,jde
+   INTEGER, INTENT(IN) ::  nlcat,num_urban_ndm,num_urban_hi,nurbm
+   INTEGER, INTENT(IN)  :: LCZ_1,LCZ_11,urban_veg_opt
+   INTEGER :: itf,jtf,i,j,k,dir,UTYPE,heights,ISWATER,SF_PHYSICS,id
+   REAL, DIMENSION( ims:ime,1:num_urban_hi , jms:jme), INTENT(INOUT) :: HI_URB2D
+   REAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: BW_URB2D
+   REAL, DIMENSION( ims:ime,1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SW_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: HGT_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: FRC_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LP_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LB_URB2D
+   INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: IVGTYP
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LU_INDEX
+   REAL, DIMENSION( ims:ime, NLCAT, jms:jme ) , INTENT(IN)::   LANDUSEF
+   REAL, DIMENSION(ims:ime,nurbm,jms:jme) :: LCZ_FRACTION
+   REAL,DIMENSION(nurbm) :: H_AVE
+   REAL :: INDEX_URBAN
+   REAL :: FRAC_LCZ,TOT_AREA_R
+   REAL :: INDEX_VEGETATION,SUM_URBAN,HI_SUM
+   INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(OUT) :: URBAN_VEGETATION
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: XLAND,LANDMASK
+
+
+   do i=ims,ime
+   do j=jms,jme
+    FRC_URB2D(I,J)=0.
+    BW_URB2D(I,:,J)=0.
+    SW_URB2D(I,:,J)=0.
+    HI_URB2D(I,:,J)=0.
+    HGT_URB2D(I,J)=0.
+    LP_URB2D(I,J)=0.
+    LB_URB2D(I,J)=0.
+     FRAC_LCZ=0.
+     TOT_AREA_R=0.
+     INDEX_URBAN=0.
+     SUM_URBAN=0.
+     INDEX_VEGETATION=0.
+     URBAN_VEGETATION(I,J)=0
+     do K=1,nurbm
+     H_AVE(K)=0.
+     do heights=1,NUMHGT_TBL(K)
+     H_AVE(K)=H_AVE(K)+HEIGHT_BIN_TBL(heights,K)*HPERCENT_BIN_TBL(heights,K)/100.
+     enddo
+     enddo
+
+     do K=1,LCZ_11
+         if(LANDUSEF(I,K,J).gt.INDEX_URBAN)then
+         INDEX_URBAN=LANDUSEF(I,K,J)
+         IVGTYP(I,J)=K
+         LU_INDEX(I,J)=K
+         endif
+     enddo
+
+     FRAC_LCZ=0.
+     UTYPE=0
+     do K=LCZ_1,LCZ_11
+       UTYPE=K-LCZ_1+1
+       FRAC_LCZ=FRAC_LCZ+LANDUSEF(I,K,J)
+       FRC_URB2D(I,J)=FRC_URB2D(I,J)+LANDUSEF(I,K,J)*FRC_URB_TBL(UTYPE)
+     enddo
+
+      if(FRC_URB2D(I,J).ge.0.1)then
+
+       INDEX_URBAN=0
+       do K=1,LCZ_11
+         if(LANDUSEF(I,K,J).gt.INDEX_URBAN)then
+         INDEX_URBAN=LANDUSEF(I,K,J)
+         IVGTYP(I,J)=K
+         LU_INDEX(I,J)=K
+         endif
+        enddo
+
+
+      do K=LCZ_1,LCZ_11
+
+       UTYPE=K-LCZ_1+1
+       TOT_AREA_R=TOT_AREA_R+BUILDING_WIDTH_TBL(1,UTYPE)*BUILDING_WIDTH_TBL(2,UTYPE)*LANDUSEF(I,K,J)/FRAC_LCZ
+       enddo
+
+
+        do K=LCZ_1,LCZ_11
+        UTYPE=K-LCZ_1+1
+        HGT_URB2D(I,J)=HGT_URB2D(I,J)+H_AVE(UTYPE)*LANDUSEF(I,K,J)/FRAC_LCZ*(BUILDING_WIDTH_TBL(2,UTYPE)*BUILDING_WIDTH_TBL(1,UTYPE))/TOT_AREA_R
+        do id=1,num_urban_ndm
+         BW_URB2D(I,id,J)=BW_URB2D(I,id,J)+BUILDING_WIDTH_TBL(id,UTYPE)*LANDUSEF(I,K,J)/FRAC_LCZ
+         SW_URB2D(I,id,J)=SW_URB2D(I,id,J)+STREET_WIDTH_TBL(id,UTYPE)*LANDUSEF(I,K,J)/FRAC_LCZ
+        enddo
+        SUM_URBAN=SUM_URBAN+LANDUSEF(I,K,J)/FRAC_LCZ
+        enddo
+
+        do heights=1,num_urban_hi
+        HI_URB2D(I,heights,J)=0.
+        DO K=LCZ_1,LCZ_11
+        UTYPE=K-LCZ_1+1
+        HI_URB2D(I,heights,J)=HI_URB2D(I,heights,J)+max(0.,HPERCENT_BIN_TBL(heights,UTYPE)/100.)*LANDUSEF(I,K,J)/FRAC_LCZ
+        ENDDO
+        enddo
+
+     IF(urban_veg_opt.eq.1)THEN
+     do K=1,LCZ_1-1
+     if(LANDUSEF(I,K,J).gt.INDEX_VEGETATION)then
+        INDEX_VEGETATION=LANDUSEF(I,K,J)
+        URBAN_VEGETATION(I,J)=K
+
+     endif
+     enddo
+     ENDIF
+
+     else
+     FRC_URB2D(I,J)=0.
+     INDEX_VEGETATION=0.
+     do K=1,LCZ_1-1
+        if(LANDUSEF(I,K,J).gt.INDEX_VEGETATION)then
+        INDEX_VEGETATION=LANDUSEF(I,K,J)
+        IVGTYP(I,J)=K
+        LU_INDEX(I,J)=K
+        endif
+     enddo
+        HGT_URB2D(I,J)=0.
+        HI_URB2D(I,:,J)=0.
+    endif
+    if (FRC_URB2D(I,J).gt.0. .and. FRC_URB2D(I,J).lt.0.1) FRC_URB2D(I,J)=0.
+    ! Enforce non-urban consistency: if both categories are non-LCZ,
+    ! keep all urban fraction/morphology fields strictly zero.
+    if (IVGTYP(I,J).lt.LCZ_1 .and. LU_INDEX(I,J).lt.LCZ_1) then
+       FRC_URB2D(I,J)=0.
+       BW_URB2D(I,:,J)=0.
+       SW_URB2D(I,:,J)=0.
+       HI_URB2D(I,:,J)=0.
+       HGT_URB2D(I,J)=0.
+       LP_URB2D(I,J)=0.
+       LB_URB2D(I,J)=0.
+    else
+       if (IVGTYP(I,J).lt.LCZ_1) IVGTYP(I,J)=max(LCZ_1,min(LCZ_11,NINT(LU_INDEX(I,J))))
+       if (LU_INDEX(I,J).lt.LCZ_1) LU_INDEX(I,J)=REAL(max(LCZ_1,min(LCZ_11,IVGTYP(I,J))))
+       UTYPE=max(1,min(nurbm,IVGTYP(I,J)-LCZ_1+1))
+       HI_SUM=SUM(HI_URB2D(I,1:num_urban_hi,J))
+       if (FRC_URB2D(I,J).lt.0.1 .or. minval(BW_URB2D(I,1:num_urban_ndm,J)).le.0. .or.  &
+           minval(SW_URB2D(I,1:num_urban_ndm,J)).le.0. .or. HI_SUM.le.0.) then
+          FRC_URB2D(I,J)=max(0.1,FRC_URB_TBL(UTYPE))
+          do id=1,num_urban_ndm
+             BW_URB2D(I,id,J)=max(1.,BUILDING_WIDTH_TBL(id,UTYPE))
+             SW_URB2D(I,id,J)=max(1.,STREET_WIDTH_TBL(id,UTYPE))
+          enddo
+          HI_SUM=0.
+          do heights=1,num_urban_hi
+             HI_URB2D(I,heights,J)=max(0.,HPERCENT_BIN_TBL(heights,UTYPE))/100.
+             HI_SUM=HI_SUM+HI_URB2D(I,heights,J)
+          enddo
+          if (HI_SUM.le.0.) then
+             HI_URB2D(I,:,J)=0.
+             HI_URB2D(I,1,J)=1.
+             HI_SUM=1.
+          endif
+          do heights=1,num_urban_hi
+             HI_URB2D(I,heights,J)=HI_URB2D(I,heights,J)/HI_SUM
+          enddo
+          HGT_URB2D(I,J)=max(HGT_URB2D(I,J),H_AVE(UTYPE))
+       endif
+    endif
+    if(IVGTYP(I,J).eq.ISWATER)then
+        LANDMASK(I,J)=-1
+        XLAND(I,J)=2
+    else
+        LANDMASK(I,J)=1
+        XLAND(I,J)=1
+    endif
+     IF(FRC_URB2D(I,J).ge.0.1)THEN
+     LP_URB2D(I,J) = FRC_URB2D(I,J) / (1.0 + (0.5 * (SW_URB2D(I,1,J) + SW_URB2D(I,2,J))) /  &
+                                         (0.5 * (BW_URB2D(I,1,J) + BW_URB2D(I,2,J))))
+
+     LB_URB2D(I,J) = LP_URB2D(I,J) * (1.0 + (2.0 * HGT_URB2D(I,J)) /  &
+                                         (0.5 * (BW_URB2D(I,1,J) + BW_URB2D(I,2,J))))
+
+     ENDIF
+   enddo
+   enddo
+
+   RETURN
+   END SUBROUTINE wudapt_interpolation
+
+!===========================================================================
 !
 ! subroutine urban_var_init: initialization of urban state variables
 !
@@ -2557,7 +3027,7 @@ ENDIF
    SUBROUTINE urban_var_init(ISURBAN, TSURFACE0_URB,TLAYER0_URB,TDEEP0_URB,IVGTYP,  & ! in
                              ims,ime,jms,jme,kms,kme,num_soil_layers,         & ! in
                              LCZ_1,LCZ_2,LCZ_3,LCZ_4,LCZ_5,                &
-                             LCZ_6,LCZ_7,LCZ_8,LCZ_9,LCZ_10,LCZ_11,        & 
+                             LCZ_6,LCZ_7,LCZ_8,LCZ_9,LCZ_10,LCZ_11,        &
                              restart,sf_urban_physics,                     & !in
                              XXXR_URB2D,XXXB_URB2D,XXXG_URB2D,XXXC_URB2D,  & ! inout
                              TR_URB2D,TB_URB2D,TG_URB2D,TC_URB2D,QC_URB2D, & ! inout
@@ -2588,6 +3058,7 @@ ENDIF
                              TRV_URB4D,QR_URB4D,QGR_URB3D,TGR_URB3D,       & !GRZ
                              DRAIN_URB4D,DRAINGR_URB3D,SFRV_URB3D,         & !GRZ
                              LFRV_URB3D,DGR_URB3D,DG_URB3D,LFR_URB3D,LFG_URB3D,&!GRZ
+                             TGV_URB4D,SFGV_URB3D,LFGV_URB3D,QG_URB4D,& !GARDEN
                              SMOIS_URB,                                    &
                              LP_URB2D,HI_URB2D,LB_URB2D,                   & ! inout
                              HGT_URB2D,MH_URB2D,STDH_URB2D,                & ! inout
@@ -2599,7 +3070,7 @@ ENDIF
                              A_E_BEP,B_U_BEP,B_V_BEP,                      & ! inout multi-layer urban
                              B_T_BEP,B_Q_BEP,B_E_BEP,DLG_BEP,              & ! inout multi-layer urban
                              DL_U_BEP,SF_BEP,VL_BEP,                       & ! inout multi-layer urban
-                             FRC_URB2D, UTYPE_URB2D,USE_WUDAPT_LCZ)                         ! inout
+                             FRC_URB2D, UTYPE_URB2D,USE_WUDAPT_LCZ,BW_URB2D,SW_URB2D)                         ! inout
    IMPLICIT NONE
 
    INTEGER, INTENT(IN) :: ISURBAN, sf_urban_physics,use_wudapt_lcz
@@ -2624,7 +3095,7 @@ ENDIF
    REAL, DIMENSION( ims:ime, jms:jme ), INTENT(IN)                    :: TDEEP0_URB
    INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(IN)                 :: IVGTYP
    LOGICAL , INTENT(IN) :: restart
- 
+
    REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: TR_URB2D
    REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: TB_URB2D
    REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: TG_URB2D
@@ -2695,6 +3166,10 @@ ENDIF
    REAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ),INTENT(INOUT) :: DG_URB3D !GRZ
    REAL, DIMENSION( ims:ime, 1:urban_map_zdf, jms:jme ),INTENT(INOUT) :: LFR_URB3D !GRZ
    REAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: LFG_URB3D !GRZ
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_gd, jms:jme ), INTENT(INOUT)  :: TGV_URB4D !GARDEN
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_gd, jms:jme ), INTENT(INOUT)  :: QG_URB4D !GARDEN
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: SFGV_URB3D !GARDEN
+   REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ), INTENT(INOUT) :: LFGV_URB3D !GARDEN
    REAL, DIMENSION( ims:ime, 1:num_soil_layers, jms:jme ), INTENT(IN) ::SMOIS_URB
    REAL, DIMENSION( ims:ime,1:num_urban_hi , jms:jme), INTENT(INOUT) :: HI_URB2D
    REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: LP_URB2D
@@ -2718,7 +3193,7 @@ ENDIF
    REAL, DIMENSION(ims:ime, kms:kme,jms:jme),INTENT(INOUT) :: SF_BEP
    REAL, DIMENSION(ims:ime, kms:kme, jms:jme), INTENT(INOUT) :: DL_U_BEP
 !
-   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: FRC_URB2D
+   REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: FRC_URB2D,BW_URB2D,SW_URB2D
    INTEGER, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: UTYPE_URB2D
    INTEGER                                            :: UTYPE_URB
 !FS
@@ -2740,7 +3215,7 @@ ENDIF
       LH_URB2D(I,J)=0.
       G_URB2D(I,J)=0.
       RN_URB2D(I,J)=0.
-      
+
 !m
 !FS   FRC_URB2D(I,J)=0.
       UTYPE_URB2D(I,J)=0
@@ -2808,7 +3283,8 @@ ENDIF
                      ENDDO
                   ENDIF
                ENDIF
-                IF (FRC_URB2D(I,J)>0.and.FRC_URB2D(I,J)<=1.) THEN
+                IF (FRC_URB2D(I,J)>0)THEN
+                        IF(FRC_URB2D(I,J).gt.1.)FRC_URB2D(I,J)=1.
                   CONTINUE
                 ELSE
                   WRITE(mesg,*) 'WARNING, FRC_URB2D = 0 BUT IVGTYP IS URBAN'
@@ -2907,7 +3383,7 @@ ENDIF
       DO K=1,num_soil_layers
         TGL_URB3D(I,K,J)=TLAYER0_URB(I,K,J)+0.
       END DO
-      
+
 ! multi-layer urban
        IF((SF_URBAN_PHYSICS.eq.2).OR.(SF_URBAN_PHYSICS.eq.3)) THEN
         IF (UTYPE_URB2D(I,J) > 0) THEN
@@ -2924,9 +3400,9 @@ ENDIF
         SFW2_URB3D(I,:,J)=0.
         SFR_URB3D(I,:,J)=0.
         SFG_URB3D(I,:,J)=0.
-       
-       ENDIF 
-              
+
+       ENDIF
+
       if (SF_URBAN_PHYSICS.EQ.3) then
          LF_AC_URB3D(I,J)=0.
          SF_AC_URB3D(I,J)=0.
@@ -2952,8 +3428,11 @@ ENDIF
         TRV_URB4D(I,:,J)=TBLEND_TBL(UTYPE_URB2D(I,J))
        ELSE
        TRV_URB4D(I,:,J)=tlayer0_urb(I,1,J) !GRZ
-      ENDIF
-
+       ENDIF
+            QG_URB4D(I,:,J)=SMOIS_URB(I,1,J)
+            TGV_URB4D(I,:,J)=tlayer0_urb(I,1,J)
+            SFGV_URB3D(I,:,J)=0.
+            LFGV_URB3D(I,:,J)=0.
             TLEV_URB3D(I,:,J)=tlayer0_urb(I,1,J)
             TW1LEV_URB3D(I,:,J)=tlayer0_urb(I,1,J)
             TW2LEV_URB3D(I,:,J)=tlayer0_urb(I,1,J)
@@ -3048,6 +3527,7 @@ ENDIF
 
     END DO
    END DO
+
    RETURN
    END SUBROUTINE urban_var_init
 !===========================================================================
@@ -3071,8 +3551,8 @@ ENDIF
 !
 !  bisection (not used)
 !
-!============================================================================== 
-   SUBROUTINE bisection(TSP,PS,S,EPS,RX,SIG,RHO,CP,CH,UA,QA,TA,EL,BET,AKS,TSL,DZ,TS) 
+!==============================================================================
+   SUBROUTINE bisection(TSP,PS,S,EPS,RX,SIG,RHO,CP,CH,UA,QA,TA,EL,BET,AKS,TSL,DZ,TS)
 
      REAL, INTENT(IN) :: TSP,PS,S,EPS,RX,SIG,RHO,CP,CH,UA,QA,TA,EL,BET,AKS,TSL,DZ
      REAL, INTENT(OUT) :: TS
@@ -3094,7 +3574,7 @@ ENDIF
        TS=0.5*(TS1+TS2)
 
        ES=6.11*EXP( (2.5*10.**6./461.51)*(TS-273.15)/(273.15*TS) )
-       QS0=0.622*ES/(PS-0.378*ES) 
+       QS0=0.622*ES/(PS-0.378*ES)
        R=EPS*(RX-SIG*(TS**4.)/60.)
        H=RHO*CP*CH*UA*(TS-TA)*100.
        ELE=RHO*EL*CH*UA*BET*(QS0-QA)*100.
@@ -3221,7 +3701,7 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
       ELSE
       ZT = EXP (2.0-AKANDA*(SQVISC**2 * USTAR * Z0)**0.25)* Z0
       END IF
-      
+
       ZSLU = ZLM + ZU
 
       ZSLT = ZLM + ZT
@@ -3241,7 +3721,7 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
 
          ZETAT = ZT * RLMO
          IF (ILECH .eq. 0) THEN
-            IF (RLMO .lt. 0.0)THEN 
+            IF (RLMO .lt. 0.0)THEN
                XLU4 = 1. -16.* ZETALU
                XLT4 = 1. -16.* ZETALT
                XU4 = 1. -16.* ZETAU
@@ -3324,7 +3804,7 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
   END SUBROUTINE SFCDIF_URB
 ! ----------------------------------------------------------------------
 !===========================================================================
-!  DIREVAP 
+!  DIREVAP
 !  CALCULATE DIRECT SOIL EVAPORATION
 !===========================================================================
    SUBROUTINE DIREVAP (EDIR,ETP,SMC,SHDFAC,SMCMAX,SMCDRY,FXEXP)
@@ -3345,13 +3825,13 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
         FX = 0.
       ENDIF
       EDIR = FX * ( 1.0- SHDFAC ) * ETP * 0.001
-      
+
  END SUBROUTINE DIREVAP
 !===========================================================================
 !  TRANSP
 !  CALCULATE EVAPOTRANSPIRATION FOR VEGETATIO SURFACE
 !===========================================================================
-      
+
      SUBROUTINE TRANSP (ETT,ET,EC,SHDFAC,ETP1,CMC,CFACTR,CMCMAX,LAI,RSMIN,RSMAX,RGL,SX, &
                         TS,TA,QA,SMC,SMCWLT,SMCREF,CPP,PS,CH,EPSV,DELT, NROOT,NSOIL,    &
                         DZVR, ZSOIL, HS)
@@ -3365,14 +3845,14 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
      REAL              :: SIGMA, PC, CMC2MS, SGX, DENOM, RTX, ETT1
      INTEGER           :: K
      REAL, DIMENSION(1:NROOT) ::  PART, GX
-     
+
      SLV    = 2.501E+6
      SIGMA  = 5.67E-8
      ETT    = 0.0
      DO K = 1, NSOIL
        ET(K) = 0.
      END DO
-     
+
 ! ----------------------------------------------------------------------
 ! INITIALIZE CANOPY RESISTANCE MULTIPLIER TERMS.
 ! ----------------------------------------------------------------------
@@ -3380,7 +3860,7 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
       RCT = 0.0
       RCQ = 0.0
       RCSOIL = 0.0
-      
+
 ! ----------------------------------------------------------------------
 ! CONTRIBUTION DUE TO INCOMING SOLAR RADIATION
 ! ----------------------------------------------------------------------
@@ -3398,35 +3878,35 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
 ! RCQ EXPRESSION FROM SSIB  (Niyogi and Raman, 1997)
 ! ----------------------------------------------------------------------
       EA = 6.11*EXP((2.5*10.**6./461.51)*(TA-273.15)/(273.15*TA) )
-      WS = 0.622*EA/1013   
+      WS = 0.622*EA/1013
       RCQ = 1.0/ (1.0+ HS * (WS - QA))
       RCQ = MAX (RCQ,0.01)
 ! ----------------------------------------------------------------------
 ! CONTRIBUTION DUE TO SOIL MOISTURE AVAILABILITY.
 ! DETERMINE CONTRIBUTION FROM EACH SOIL LAYER, THEN ADD THEM UP.
 ! ----------------------------------------------------------------------
-      DO K = 1, NROOT  
+      DO K = 1, NROOT
        GX(K) = (SMC(K) - SMCWLT) / (SMCREF - SMCWLT)
          IF (GX(K) >  1.) GX(K) = 1.
          IF (GX(K) <  0.) GX(K) = 0.
          PART (K) = ( -DZVR (K)/ ZSOIL (3)) * GX(K)
       END DO
-      
+
       SGX =0.0
-      DO K = 1, NROOT 
+      DO K = 1, NROOT
         SGX    = SGX    + GX (K)
         RCSOIL = RCSOIL + PART (K)
       END DO
       SGX =SGX / NROOT
-      
+
       RCSOIL = MAX (RCSOIL,0.0001)
 
       RC = RSMIN / (LAI * RCS * RCT * RCQ * RCSOIL)
       DESDT = 0.622*SLV*EA/461.51/TA/TA/1013
       DELTA = (SLV / CPP)* DESDT
       RR = (4.* EPSV *SIGMA * 287.04 / CPP)* (TA **4.)/ (TS * CH) + 1.0
-      PC = (RR + DELTA)/ (RR * (1. + RC * CH) + DELTA)  
-      
+      PC = (RR + DELTA)/ (RR * (1. + RC * CH) + DELTA)
+
       IF (CMC .ne. 0.0) THEN
          ETT1 = SHDFAC * PC * ETP1 * (1.0- (CMC / CMCMAX) ** CFACTR) * 0.001
       ELSE
@@ -3434,19 +3914,19 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
       ENDIF
 
       DENOM = 0.
-      DO K = 1, NROOT 
+      DO K = 1, NROOT
          RTX= (-DZVR (K)/ ZSOIL (3)) + GX(K) - SGX
          GX (K) = GX (K) * MAX ( RTX, 0. )
          DENOM  = DENOM + GX (K)
-      END DO 
+      END DO
       IF (DENOM .le. 0.0) DENOM =1.
-      
-      DO K = 1, NROOT 
+
+      DO K = 1, NROOT
          ET(K) = ETT1 * GX (K) / DENOM
          ETT   = ETT + ET (K)
       END DO
-      
-      
+
+
       IF (CMC > 0.0) THEN
       EC = SHDFAC * ( ( CMC / CMCMAX ) ** CFACTR ) * ETP1 * 0.001
       ELSE
@@ -3454,16 +3934,16 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
       END IF
       CMC2MS = CMC / DELT
       EC   = MIN ( CMC2MS, EC )
-      
+
   END SUBROUTINE TRANSP
 ! ----------------------------------------------------------------------
 ! SUBROUTINE SMFLX
 ! ----------------------------------------------------------------------
-  
+
        SUBROUTINE SMFLX (SMCP,SMC,NSOIL,CMCP,CMC,DT,PRCP1,ZSOIL,       &
      &                   SMCMAX,BEXP,SMCWLT,DKSAT,DWSAT,               &
      &                   SHDFAC,CMCMAX,RUNOFF1,RUNOFF2,RUNOFF3,        &
-                         EDIR,EC,ET,DRIP)              
+                         EDIR,EC,ET,DRIP)
 
 ! CALCULATE SOIL MOISTURE FLUX.  THE SOIL MOISTURE CONTENT IS UPDATED WITH
 ! PROGNOSTIC EQNS. THE CANOPY MOISTURE CONTENT (CMC) IS ALSO UPDATED.
@@ -3505,8 +3985,8 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
 ! TENDENCY EQUATIONS.
 ! ----------------------------------------------------------------------
       CALL SRT (RHSTT,EDIR,ET,SMCP,NSOIL,PCPDRP,ZSOIL,DWSAT,DKSAT,    &
-                   SMCMAX,BEXP,RUNOFF1,RUNOFF2,DT,SMCWLT,AI,BI,CI) 
-                   
+                   SMCMAX,BEXP,RUNOFF1,RUNOFF2,DT,SMCWLT,AI,BI,CI)
+
       CALL SSTEP (SMCP,SMC,CMCP,CMC,RHSTT,RHSCT,DT,NSOIL,SMCMAX,     &
                         CMCMAX,RUNOFF3,ZSOIL,AI,BI,CI)
 ! ----------------------------------------------------------------------
@@ -3544,20 +4024,20 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
 ! INFILTRATION FORMULE FROM SCHAAKE AND KOREN MODEL.
 ! MODIFIED BY Q DUAN
 ! ----------------------------------------------------------------------
-         
+
          PDDUM = PCPDRP
          RUNOFF1 = 0.0
          PAR = 2.0E-6
-         
-         IF (PCPDRP /=  0.0) THEN         
+
+         IF (PCPDRP /=  0.0) THEN
          SMCAV = SMCMAX - SMCWLT
          DDMAX (1) = - ZSOIL (1)* SMCAV
-         DDMAX (1) = DDMAX (1)* (1.0- (SMCP (1) - SMCWLT)/ SMCAV)        
+         DDMAX (1) = DDMAX (1)* (1.0- (SMCP (1) - SMCWLT)/ SMCAV)
          DDMAX (2) = (ZSOIL (1) - ZSOIL (2))* SMCAV
          DDMAX (2) = DDMAX (2)* (1.0- (SMCP (2) - SMCWLT)/ SMCAV)
          DDMAX (3) = (ZSOIL (2) - ZSOIL (3))* SMCAV
          DDMAX (3) = DDMAX (3)* (1.0- (SMCP (3) - SMCWLT)/ SMCAV)
-         
+
          DD = DDMAX(1)+DDMAX(2)+DDMAX(3)
          DT1 = DT/86400
          KDT = 3.0 * DKSAT / PAR
@@ -3571,7 +4051,7 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
          CALL WDFCND (WDF,WCND,MXSMC,SMCMAX,BEXP,DKSAT,DWSAT)
          INFMAX = MAX (INFMAX,WCND)
          INFMAX = MIN (INFMAX,PX/DT)
-         
+
 
          IF (PCPDRP >  INFMAX) THEN
           RUNOFF1  = PCPDRP - INFMAX
@@ -3585,7 +4065,7 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
       DDZ = 1. / ( - .5 * ZSOIL (2) )
       AI (1) = 0.0
       BI (1) = WDF * DDZ / ( - ZSOIL (1) )
-      CI (1) = - BI (1)   
+      CI (1) = - BI (1)
       DSMDZ = (SMCP (1) - SMCP (2) )/( - 0.5 * ZSOIL(2))
       RHSTT (1) = (WDF * DSMDZ + WCND- PDDUM + EDIR + ET(1))/ ZSOIL (1)
       SSTT = WDF * DSMDZ + WCND+ EDIR + ET(1)
@@ -3607,7 +4087,7 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
           CALL WDFCND (WDF2,WCND2,SMCP(NSOIL-1),SMCMAX,BEXP,DKSAT,DWSAT)
             DSMDZ2 = 0.0
             CI (K) = 0.0
-         END IF  
+         END IF
          NUMER = (WDF2 * DSMDZ2) - (WDF * DSMDZ)         &
                  - WCND+ ET(K)
          RHSTT (K) = NUMER / ( - DENOM2)
@@ -3648,7 +4128,7 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
       REAL, DIMENSION(1:NSOIL), INTENT(IN)     :: SMCP, ZSOIL
       REAL, DIMENSION(1:NSOIL), INTENT(OUT)    :: SMC
       REAL, DIMENSION(1:NSOIL), INTENT(INOUT)  :: RHSTT
-      REAL, DIMENSION(1:NSOIL), INTENT(INOUT)  :: AI, BI, CI 
+      REAL, DIMENSION(1:NSOIL), INTENT(INOUT)  :: AI, BI, CI
       REAL, DIMENSION(1:NSOIL)  :: RHSTTin, SMCOUT,SMCIN
       REAL, DIMENSION(1:NSOIL)  :: CIin
       REAL                      :: DDZ, RHSCT, WPLUS, STOT
@@ -3770,7 +4250,7 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
 ! # 0  , . . . , 0 ,   0   ,   0   ,  A(M) ,  B(M) # # P(M) #   # D(M) #
 ! ###                                            ### ###  ###   ###  ###
 ! ----------------------------------------------------------------------
-  
+
   SUBROUTINE ROSR12 (P,A,B,C,D,DELTA,NSOIL)
       IMPLICIT NONE
 
@@ -3863,7 +4343,7 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
 
       SUBROUTINE HRT (RHSTS,STC,SMC,SMCMAX,NSOIL,ZSOIL,YY,ZZ1,          &
                        TBOT,ZBOT,DT,DF1,AI,BI,CI,QUARTZ,CSOIL,CAPR)
-                       
+
       IMPLICIT NONE
       LOGICAL              :: ITAVG
       INTEGER, INTENT(IN)  :: NSOIL
@@ -3883,19 +4363,19 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
 ! INITIALIZE LOGICAL FOR SOIL LAYER TEMPERATURE AVERAGING.
 ! ----------------------------------------------------------------------
        ITAVG = .TRUE.
-       
+
 ! ----------------------------------------------------------------------
 ! TOP SOIL LAYER
 ! ----------------------------------------------------------------------
       HCPCT = SMC (1)* CH2O + (1.0- SMCMAX)* CSOIL + (SMCMAX - SMC (1))&
-       * CAIR                                                          
+       * CAIR
       DDZ = 1.0 / ( -0.5 * ZSOIL (2) )
       AI (1) = 0.0
       CI (1) = (DF1 * DDZ) / (ZSOIL (1) * HCPCT)
 
 ! ----------------------------------------------------------------------
 ! CALCULATE THE VERTICAL SOIL TEMP GRADIENT BTWN THE 1ST AND 2ND SOIL
-! LAYERS.  THEN CALCULATE THE SUBSURFACE HEAT FLUX. 
+! LAYERS.  THEN CALCULATE THE SUBSURFACE HEAT FLUX.
 ! ----------------------------------------------------------------------
       BI (1) = - CI (1) + DF1 / (0.5 * ZSOIL (1) * ZSOIL (1)* HCPCT *    &
        ZZ1)
@@ -3926,7 +4406,7 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
 ! ----------------------------------------------------------------------
          IF (K < NSOIL-1 ) THEN
          HCPCT = SMC (K)* CH2O + (1.0- SMCMAX)* CSOIL + (SMCMAX - SMC (  &
-                K))* CAIR 
+                K))* CAIR
             CALL TDFCND  (DF1K, SMC(K), QUARTZ, SMCMAX)
             DENOM = 0.5 * ( ZSOIL (K -1) - ZSOIL (K +1) )
             DTSDZ2 = (STC (K) - STC (K +1) ) / DENOM
@@ -3943,9 +4423,9 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
             END IF
 
          ELSEIF (K == NSOIL-1) THEN
-         
+
          HCPCT = SMC (K)* CH2O + (1.0- SMCMAX)* CSOIL + (SMCMAX- SMC (  &
-                K))* CAIR 
+                K))* CAIR
             CALL TDFCND  (DF1K, SMC(K), QUARTZ, SMCMAX)
             DENOM = 0.5 * ( ZSOIL (K -1) - ZSOIL (K +1) )
             DTSDZ2 = (STC (K) - STC (K +1) ) / DENOM
@@ -3958,8 +4438,8 @@ SUBROUTINE SFCDIF_URB (ZLM,Z0,THZ0,THLM,SFCSPD,AKANDA,AKMS,AKHS,RLMO,CD,ZT_OUT,V
        HCPCT)
             IF (ITAVG) THEN
                CALL TBND (STC (K),TBOT,ZSOIL,ZBOT,K,NSOIL,TBK1)
-            END IF        
-         ELSE         
+            END IF
+         ELSE
 ! ----------------------------------------------------------------------
 ! SPECIAL CASE OF BOTTOM LAYER (CONCRETE ROOF)
 ! ----------------------------------------------------------------------

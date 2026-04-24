@@ -2,8 +2,6 @@
  module module_sf_sfclayrev
  use ccpp_kind_types,only: kind_phys
  use sf_sfclayrev,only: sf_sfclayrev_run
-
-
  implicit none
  private
  public:: sfclayrev
@@ -27,19 +25,21 @@
                       its,ite,jts,jte,kts,kte,                      &
                       ustm,ck,cka,cd,cda,isftcflx,iz0tlnd,          &
                       shalwater_z0,water_depth,                     &
-                      scm_force_flux,errmsg,errflg)
+                      scm_force_flux,errmsg,errflg,ivgtyp,urban_vegetation,sf_urban_physics)
 !=================================================================================================================
-                                                               
+
 !--- input arguments:
  integer,intent(in):: ids,ide,jds,jde,kds,kde, &
                       ims,ime,jms,jme,kms,kme, &
                       its,ite,jts,jte,kts,kte
 
  integer,intent(in):: isfflx
- integer,intent(in):: shalwater_z0 
+ integer,intent(in):: shalwater_z0
  integer,intent(in),optional:: isftcflx, iz0tlnd
  integer,intent(in),optional:: scm_force_flux
 
+ integer,intent(in),optional:: sf_urban_physics
+ integer,intent(in),optional,dimension(ims:ime,jms:jme):: ivgtyp, urban_vegetation
  real(kind=kind_phys),intent(in):: svp1,svp2,svp3,svpt0
  real(kind=kind_phys),intent(in):: ep1,ep2,karman
  real(kind=kind_phys),intent(in):: p1000mb
